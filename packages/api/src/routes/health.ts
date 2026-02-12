@@ -13,11 +13,14 @@ export function healthRoutes(db: Database) {
         db: "connected",
         timestamp: new Date().toISOString(),
       });
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[health] Database check failed:", err);
       return c.json(
         {
           status: "degraded",
           db: "disconnected",
+          error: message,
           timestamp: new Date().toISOString(),
         },
         503,

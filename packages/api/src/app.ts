@@ -21,7 +21,7 @@ export function createApp() {
 
   app.notFound((c) => {
     throw new ScuttlePayError({
-      code: ErrorCode.INTERNAL_ERROR,
+      code: ErrorCode.NOT_FOUND,
       message: `Route not found: ${c.req.method} ${c.req.path}`,
     });
   });

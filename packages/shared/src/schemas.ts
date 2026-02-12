@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TransactionStatus, TransactionType } from "./types.js";
+import { TransactionStatus, TransactionType } from "./enums.js";
 
 export const usdcAmountSchema = z
   .string()

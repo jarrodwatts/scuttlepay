@@ -16,15 +16,15 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
+    "@hono/zod-validator": "^0.7.6",
     "@neondatabase/serverless": "^0.10",
     "@scuttlepay/shared": "workspace:*",
-    "bcrypt": "^5.1",
     "dotenv": "^16",
     "drizzle-orm": "^0.38",
-    "hono": "^4"
+    "hono": "^4",
+    "zod": "^3.24"
   },
   "devDependencies": {
-    "@types/bcrypt": "^5.0",
     "@types/node": "^22",
     "drizzle-kit": "^0.30",
     "tsx": "^4",

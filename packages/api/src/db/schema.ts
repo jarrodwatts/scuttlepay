@@ -7,6 +7,7 @@ import {
   numeric,
   integer,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -28,44 +29,56 @@ export const usersRelations = relations(users, ({ many }) => ({
   wallets: many(wallets),
 }));
 
-export const apiKeys = pgTable("api_keys", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id),
-  keyHash: text("key_hash").notNull(),
-  keyPrefix: text("key_prefix").notNull(),
-  name: text("name").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-});
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    keyHash: text("key_hash").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    name: text("name").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("api_keys_prefix_active_idx").on(table.keyPrefix, table.isActive),
+  ],
+);
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
 }));
 
-export const wallets = pgTable("wallets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id),
-  address: text("address").notNull().unique(),
-  chainId: integer("chain_id").notNull(),
-  label: text("label").notNull().default("default"),
-  thirdwebId: text("thirdweb_id").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+export const wallets = pgTable(
+  "wallets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    address: text("address").notNull().unique(),
+    chainId: integer("chain_id").notNull(),
+    label: text("label").notNull().default("default"),
+    thirdwebId: text("thirdweb_id").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("wallets_user_active_idx").on(table.userId, table.isActive),
+  ],
+);
 
 export const walletsRelations = relations(wallets, ({ one, many }) => ({
   user: one(users, { fields: [wallets.userId], references: [users.id] }),
@@ -103,31 +116,41 @@ export const spendingPoliciesRelations = relations(
   }),
 );
 
-export const transactions = pgTable("transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  walletId: uuid("wallet_id")
-    .notNull()
-    .references(() => wallets.id),
-  type: text("type").notNull().$type<"purchase" | "fund" | "refund">(),
-  status: text("status")
-    .notNull()
-    .$type<"pending" | "settling" | "settled" | "failed">(),
-  amountUsdc: numeric("amount_usdc", { precision: 20, scale: 6 }).notNull(),
-  txHash: text("tx_hash"),
-  merchantAddress: text("merchant_address").notNull(),
-  productId: text("product_id").notNull(),
-  productName: text("product_name").notNull(),
-  storeUrl: text("store_url").notNull(),
-  errorMessage: text("error_message"),
-  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-  initiatedAt: timestamp("initiated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  settledAt: timestamp("settled_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    walletId: uuid("wallet_id")
+      .notNull()
+      .references(() => wallets.id),
+    type: text("type").notNull().$type<"purchase" | "fund" | "refund">(),
+    status: text("status")
+      .notNull()
+      .$type<"pending" | "settling" | "settled" | "failed">(),
+    amountUsdc: numeric("amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    txHash: text("tx_hash"),
+    merchantAddress: text("merchant_address").notNull(),
+    productId: text("product_id").notNull(),
+    productName: text("product_name").notNull(),
+    storeUrl: text("store_url").notNull(),
+    errorMessage: text("error_message"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    initiatedAt: timestamp("initiated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("transactions_wallet_status_idx").on(table.walletId, table.status),
+    index("transactions_wallet_created_idx").on(
+      table.walletId,
+      table.createdAt,
+    ),
+  ],
+);
 
 export const transactionsRelations = relations(
   transactions,

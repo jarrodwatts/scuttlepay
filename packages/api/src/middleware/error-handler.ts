@@ -12,7 +12,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (isScuttlePayError(err)) {
     return c.json(
       { ...toApiResponse(err), requestId },
-      err.httpStatus as 400 | 401 | 404 | 500 | 502,
+      err.httpStatus,
     );
   }
 
@@ -21,6 +21,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
   const wrapped = new ScuttlePayError({
     code: ErrorCode.INTERNAL_ERROR,
     message: "An internal error occurred",
+    cause: err,
   });
 
   return c.json({ ...toApiResponse(wrapped), requestId }, 500);

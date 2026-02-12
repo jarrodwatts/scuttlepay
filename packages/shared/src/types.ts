@@ -1,26 +1,19 @@
-export const TransactionType = {
-  PURCHASE: "purchase",
-  FUND: "fund",
-  REFUND: "refund",
-} as const;
-export type TransactionType =
-  (typeof TransactionType)[keyof typeof TransactionType];
+import type { z } from "zod";
+import type {
+  walletBalanceSchema,
+  productVariantSchema,
+  productSearchResultSchema,
+  productDetailSchema,
+  purchaseResultSchema,
+} from "./schemas.js";
 
-export const TransactionStatus = {
-  PENDING: "pending",
-  SETTLING: "settling",
-  SETTLED: "settled",
-  FAILED: "failed",
-} as const;
-export type TransactionStatus =
-  (typeof TransactionStatus)[keyof typeof TransactionStatus];
+export type {
+  TransactionType,
+  TransactionStatus,
+  OrderStatus,
+} from "./enums.js";
 
-export const OrderStatus = {
-  CREATED: "created",
-  CONFIRMED: "confirmed",
-  FAILED: "failed",
-} as const;
-export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+// --- DB row types (internal, use Date) ---
 
 export interface User {
   id: string;
@@ -68,8 +61,8 @@ export interface SpendingPolicy {
 export interface Transaction {
   id: string;
   walletId: string;
-  type: TransactionType;
-  status: TransactionStatus;
+  type: import("./enums.js").TransactionType;
+  status: import("./enums.js").TransactionStatus;
   amountUsdc: string;
   txHash: string | null;
   merchantAddress: string;
@@ -89,7 +82,7 @@ export interface Order {
   walletId: string;
   shopifyOrderId: string | null;
   shopifyOrderNumber: string | null;
-  status: OrderStatus;
+  status: import("./enums.js").OrderStatus;
   productId: string;
   productName: string;
   variantId: string | null;
@@ -102,45 +95,10 @@ export interface Order {
   updatedAt: Date;
 }
 
-export interface WalletBalance {
-  balance: string;
-  currency: "USDC";
-  chain: string;
-}
+// --- API contract types (derived from zod schemas — single source of truth) ---
 
-export interface ProductVariant {
-  id: string;
-  title: string;
-  priceUsdc: string;
-}
-
-export interface ProductSearchResult {
-  id: string;
-  title: string;
-  description: string;
-  priceUsdc: string;
-  imageUrl: string | null;
-}
-
-export interface ProductDetail {
-  id: string;
-  title: string;
-  description: string;
-  priceUsdc: string;
-  images: string[];
-  variants: ProductVariant[];
-}
-
-export interface PurchaseResult {
-  transactionId: string;
-  txHash: string;
-  orderId: string | null;
-  orderNumber: string | null;
-  product: {
-    id: string;
-    name: string;
-    variantId: string | null;
-  };
-  amount: string;
-  status: TransactionStatus;
-}
+export type WalletBalance = z.infer<typeof walletBalanceSchema>;
+export type ProductVariant = z.infer<typeof productVariantSchema>;
+export type ProductSearchResult = z.infer<typeof productSearchResultSchema>;
+export type ProductDetail = z.infer<typeof productDetailSchema>;
+export type PurchaseResult = z.infer<typeof purchaseResultSchema>;
