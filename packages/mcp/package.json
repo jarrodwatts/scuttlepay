@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "@scuttlepay/shared": "workspace:*"
+    "@scuttlepay/shared": "workspace:*",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22",

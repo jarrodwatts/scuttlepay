@@ -3,6 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { ApiClient } from "./api-client.js";
+import { registerSearchProducts } from "./tools/search.js";
+import { registerGetProduct } from "./tools/product.js";
 
 import packageJson from "../package.json" with { type: "json" };
 
@@ -13,6 +15,9 @@ const server = new McpServer({
   name: "scuttlepay",
   version: packageJson.version,
 });
+
+registerSearchProducts(server, client);
+registerGetProduct(server, client);
 
 async function main() {
   const transport = new StdioServerTransport();
