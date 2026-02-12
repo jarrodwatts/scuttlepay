@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+.turbo/
+.next/
+.vercel/
+drizzle/*.sql
+*.tsbuildinfo

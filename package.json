@@ -1,0 +1,24 @@
+{
+  "name": "scuttlepay",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:push": "pnpm --filter @scuttlepay/api db:push",
+    "db:seed": "pnpm --filter @scuttlepay/api db:seed",
+    "db:studio": "pnpm --filter @scuttlepay/api db:studio"
+  },
+  "type": "module",
+  "devDependencies": {
+    "eslint": "^9",
+    "typescript-eslint": "^8",
+    "turbo": "^2",
+    "typescript": "^5.7"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  }
+}
