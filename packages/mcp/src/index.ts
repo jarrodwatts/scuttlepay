@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { ApiClient } from "./api-client.js";
 import { registerSearchProducts } from "./tools/search.js";
 import { registerGetProduct } from "./tools/product.js";
+import { registerBuy } from "./tools/buy.js";
 
 import packageJson from "../package.json" with { type: "json" };
 
@@ -18,6 +19,7 @@ const server = new McpServer({
 
 registerSearchProducts(server, client);
 registerGetProduct(server, client);
+registerBuy(server, client);
 
 async function main() {
   const transport = new StdioServerTransport();
