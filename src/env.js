@@ -13,6 +13,11 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    CHAIN_ENV: z.enum(["mainnet", "testnet"]).default("testnet"),
+    THIRDWEB_WALLET_ADDRESS: z.string().optional(),
+    THIRDWEB_WALLET_ID: z.string().optional(),
+    DEFAULT_MAX_PER_TX: z.string().default("10"),
+    DEFAULT_DAILY_LIMIT: z.string().default("50"),
   },
 
   client: {},
@@ -23,6 +28,11 @@ export const env = createEnv({
     AUTH_DISCORD_SECRET: process.env.AUTH_DISCORD_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    CHAIN_ENV: process.env.CHAIN_ENV,
+    THIRDWEB_WALLET_ADDRESS: process.env.THIRDWEB_WALLET_ADDRESS,
+    THIRDWEB_WALLET_ID: process.env.THIRDWEB_WALLET_ID,
+    DEFAULT_MAX_PER_TX: process.env.DEFAULT_MAX_PER_TX,
+    DEFAULT_DAILY_LIMIT: process.env.DEFAULT_DAILY_LIMIT,
   },
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
