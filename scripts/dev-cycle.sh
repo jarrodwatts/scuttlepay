@@ -94,7 +94,7 @@ read_progress() {
 
 update_progress() {
   local tmp="$PROGRESS_FILE.tmp"
-  jq "$1" "$PROGRESS_FILE" > "$tmp" && mv "$tmp" "$PROGRESS_FILE"
+  jq "$@" "$PROGRESS_FILE" > "$tmp" && mv "$tmp" "$PROGRESS_FILE"
 }
 
 is_task_completed() {
@@ -302,7 +302,7 @@ run_phase() {
     return 1
   fi
 
-  log "Phase: ${phase^^} (Task $task_id)"
+  log "Phase: $(echo "$phase" | tr '[:lower:]' '[:upper:]') (Task $task_id)"
 
   log_file="$LOG_DIR/task-${task_id}-${phase}.log"
 
