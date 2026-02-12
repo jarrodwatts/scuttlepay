@@ -4,7 +4,7 @@ import {
   pgTableCreator,
   primaryKey,
 } from "drizzle-orm/pg-core";
-import { type AdapterAccount } from "next-auth/adapters";
+type AdapterAccountType = "email" | "oidc" | "oauth" | "webauthn";
 
 export const createTable = pgTableCreator((name) => `scuttlepay_${name}`);
 
@@ -41,7 +41,7 @@ export const accounts = createTable(
       .references(() => users.id),
     type: d
       .varchar({ length: 255 })
-      .$type<AdapterAccount["type"]>()
+      .$type<AdapterAccountType>()
       .notNull(),
     provider: d.varchar({ length: 255 }).notNull(),
     providerAccountId: d.varchar({ length: 255 }).notNull(),

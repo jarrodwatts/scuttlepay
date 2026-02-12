@@ -1,8 +1,7 @@
-import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { db } from "./index";
 import { users, apiKeys, wallets, spendingPolicies } from "./schema";
-import { generateApiKey } from "~/server/lib/api-key";
+import { generateApiKey } from "../lib/api-key";
 
 const DEMO_EMAIL = "demo@scuttlepay.com";
 
