@@ -24,6 +24,10 @@ export const env = createEnv({
     SHOPIFY_STOREFRONT_PRIVATE_TOKEN: z.string().optional(),
     DEFAULT_MAX_PER_TX: z.string().default("10"),
     DEFAULT_DAILY_LIMIT: z.string().default("50"),
+    FACILITATOR_URL: z
+      .string()
+      .url()
+      .default("https://x402.org/facilitator"),
   },
 
   client: {},
@@ -45,6 +49,7 @@ export const env = createEnv({
     SHOPIFY_STOREFRONT_PRIVATE_TOKEN: process.env.SHOPIFY_STOREFRONT_PRIVATE_TOKEN,
     DEFAULT_MAX_PER_TX: process.env.DEFAULT_MAX_PER_TX,
     DEFAULT_DAILY_LIMIT: process.env.DEFAULT_DAILY_LIMIT,
+    FACILITATOR_URL: process.env.FACILITATOR_URL,
   },
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
