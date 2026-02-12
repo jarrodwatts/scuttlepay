@@ -4,6 +4,7 @@ import { users, apiKeys, wallets, spendingPolicies } from "./schema/index";
 import { generateApiKey } from "../lib/api-key";
 import { env } from "~/env";
 import { BASE_MAINNET, BASE_SEPOLIA } from "@scuttlepay/shared";
+import { getServerWalletAddress } from "../lib/thirdweb";
 
 const DEMO_EMAIL = "demo@scuttlepay.com";
 
@@ -60,6 +61,19 @@ async function ensureApiKey(database: Db, userId: string) {
   console.log(`\n  API Key (save this — shown once): ${raw}\n`);
 }
 
+async function resolveWalletAddress(): Promise<string> {
+  if (env.THIRDWEB_WALLET_ADDRESS) {
+    return env.THIRDWEB_WALLET_ADDRESS;
+  }
+
+  if (env.THIRDWEB_SECRET_KEY && env.THIRDWEB_WALLET_ID) {
+    console.log("Fetching wallet address from thirdweb...");
+    return getServerWalletAddress();
+  }
+
+  return "0x_placeholder_update_later";
+}
+
 async function ensureWallet(database: Db, userId: string) {
   const existing = await database
     .select()
@@ -72,8 +86,7 @@ async function ensureWallet(database: Db, userId: string) {
     return existing[0];
   }
 
-  const address =
-    env.THIRDWEB_WALLET_ADDRESS ?? "0x_placeholder_update_later";
+  const address = await resolveWalletAddress();
   const thirdwebId = env.THIRDWEB_WALLET_ID ?? "placeholder";
   const chainId = env.CHAIN_ENV === "mainnet" ? BASE_MAINNET : BASE_SEPOLIA;
 

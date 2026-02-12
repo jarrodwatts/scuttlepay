@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiKey } from "~/app/api/mcp/_middleware";
+import { ErrorCode, ScuttlePayError, toApiResponse } from "@scuttlepay/shared";
 
 export const GET = withApiKey(async (req: NextRequest, _ctx) => {
   const { searchParams } = new URL(req.url);
@@ -8,17 +9,12 @@ export const GET = withApiKey(async (req: NextRequest, _ctx) => {
   const limit = Math.min(Number(searchParams.get("limit") ?? "10"), 50);
 
   if (!query) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Missing search query parameter 'q'" } },
-      { status: 400 },
-    );
+    const err = new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: "Missing search query parameter 'q'",
+    });
+    return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
   }
 
-  // TODO: Integrate with Shopify storefront API in Task 3.x
-  return NextResponse.json({
-    data: [],
-    query,
-    limit,
-    message: "Product search not yet connected to Shopify",
-  });
+  return NextResponse.json({ data: [], query, limit });
 });
