@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db } from "./index";
-import { users, apiKeys, wallets, spendingPolicies } from "./schema";
+import { users, apiKeys, wallets, spendingPolicies } from "./schema/index";
 import { generateApiKey } from "../lib/api-key";
+import { env } from "~/env";
+import { BASE_MAINNET, BASE_SEPOLIA } from "@scuttlepay/shared";
 
 const DEMO_EMAIL = "demo@scuttlepay.com";
 
@@ -71,9 +73,9 @@ async function ensureWallet(database: Db, userId: string) {
   }
 
   const address =
-    process.env.THIRDWEB_WALLET_ADDRESS ?? "0x_placeholder_update_later";
-  const thirdwebId = process.env.THIRDWEB_WALLET_ID ?? "placeholder";
-  const chainId = process.env.CHAIN_ENV === "mainnet" ? 8453 : 84532;
+    env.THIRDWEB_WALLET_ADDRESS ?? "0x_placeholder_update_later";
+  const thirdwebId = env.THIRDWEB_WALLET_ID ?? "placeholder";
+  const chainId = env.CHAIN_ENV === "mainnet" ? BASE_MAINNET : BASE_SEPOLIA;
 
   const [wallet] = await database
     .insert(wallets)
@@ -99,8 +101,8 @@ async function ensureSpendingPolicy(database: Db, walletId: string) {
     return;
   }
 
-  const maxPerTx = process.env.DEFAULT_MAX_PER_TX ?? "10";
-  const dailyLimit = process.env.DEFAULT_DAILY_LIMIT ?? "50";
+  const maxPerTx = env.DEFAULT_MAX_PER_TX;
+  const dailyLimit = env.DEFAULT_DAILY_LIMIT;
 
   const [policy] = await database
     .insert(spendingPolicies)

@@ -1,14 +1,17 @@
 import crypto from "node:crypto";
 
-const KEY_PREFIX = "sk_test_";
 const RANDOM_BYTES = 24;
+
+function getKeyPrefix(): string {
+  return process.env.NODE_ENV === "production" ? "sk_live_" : "sk_test_";
+}
 
 export function generateApiKey(): {
   raw: string;
   hash: string;
   prefix: string;
 } {
-  const raw = `${KEY_PREFIX}${crypto.randomBytes(RANDOM_BYTES).toString("hex")}`;
+  const raw = `${getKeyPrefix()}${crypto.randomBytes(RANDOM_BYTES).toString("hex")}`;
   return {
     raw,
     hash: hashApiKey(raw),
