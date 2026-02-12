@@ -1,9 +1,15 @@
+import { and, eq } from "drizzle-orm";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { wallets } from "~/server/db/schema/wallet";
+import {
+  validateApiKey,
+  ApiKeyError,
+} from "~/server/lib/validate-api-key";
 
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth();
@@ -62,4 +68,45 @@ export const protectedProcedure = t.procedure
         session: { ...ctx.session, user: ctx.session.user },
       },
     });
+  });
+
+export const authedProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(async ({ ctx, next }) => {
+    if (ctx.session?.user) {
+      const wallet = await db
+        .select({ id: wallets.id })
+        .from(wallets)
+        .where(
+          and(
+            eq(wallets.userId, ctx.session.user.id),
+            eq(wallets.isActive, true),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0]);
+
+      return next({
+        ctx: {
+          userId: ctx.session.user.id,
+          walletId: wallet?.id ?? null,
+        },
+      });
+    }
+
+    const authHeader = ctx.headers.get("authorization");
+    try {
+      const apiKeyCtx = await validateApiKey(authHeader);
+      return next({
+        ctx: {
+          userId: apiKeyCtx.userId,
+          walletId: apiKeyCtx.walletId,
+        },
+      });
+    } catch (err) {
+      if (err instanceof ApiKeyError) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: err.message });
+      }
+      throw err;
+    }
   });
