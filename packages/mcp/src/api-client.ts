@@ -21,6 +21,7 @@ interface WalletInfo {
   chainId: number;
   label: string;
   isActive: boolean;
+  balance: string;
   createdAt: string;
 }
 
@@ -92,6 +93,11 @@ export class ApiClient {
   async getWallet(): Promise<WalletInfo> {
     const { data } = await this.get<{ data: WalletInfo }>("/api/mcp/wallet");
     return data;
+  }
+
+  async getBalance(): Promise<string> {
+    const wallet = await this.getWallet();
+    return wallet.balance;
   }
 
   async getTransactions(

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "~/server/db";
 import { wallets } from "~/server/db/schema/wallet";
 import { withApiKey } from "~/app/api/mcp/_middleware";
+import { getBalance } from "~/server/services/wallet.service";
 
 export const GET = withApiKey(async (_req, ctx) => {
   const wallet = await db
@@ -29,5 +30,7 @@ export const GET = withApiKey(async (_req, ctx) => {
     );
   }
 
-  return NextResponse.json({ data: wallet });
+  const balance = await getBalance(ctx.walletId);
+
+  return NextResponse.json({ data: { ...wallet, balance } });
 });
