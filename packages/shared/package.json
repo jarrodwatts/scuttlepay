@@ -13,14 +13,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.24"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
-    "typescript": "^5.7"
+    "typescript": "^5.8.2"
   }
 }
