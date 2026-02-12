@@ -532,8 +532,14 @@ run_task() {
       return 1
     fi
 
+    # Checkpoint: commit after implement so work isn't lost
+    commit_checkpoint "$task_id" "implement (iteration $((verify_attempts + 1)))"
+
     # Verify (always fresh session)
     if retry_phase "verify" "$task_id"; then
+      # Checkpoint: commit any fixes the verifier made
+      commit_checkpoint "$task_id" "verify (iteration $((verify_attempts + 1)))"
+
       # Check verify result
       local verify_file="$PROGRESS_DIR/verify-output-${task_id}.json"
       local status="pass"
@@ -623,6 +629,18 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
   log_ok "Task $task_id COMPLETE (${duration}s, commit: ${commit_hash:-none})"
   log ""
+}
+
+commit_checkpoint() {
+  local task_id="$1" label="$2"
+  cd "$PROJECT_DIR"
+  git add -A
+  if ! git diff --cached --quiet 2>/dev/null; then
+    git commit -m "WIP Task ${task_id}: ${label}
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+    log_ok "Checkpoint commit: $label"
+  fi
 }
 
 mark_task_failed() {
