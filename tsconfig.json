@@ -37,7 +37,8 @@
     "src/**/*.cjs",
     "src/**/*.js",
     "drizzle.config.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": ["node_modules", "generated", "packages"]
 }
