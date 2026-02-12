@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "taskId": { "type": "string" },
+    "overallStatus": { "type": "string", "enum": ["pass", "fail"] },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "fail", "skip"] },
+          "evidence": { "type": "string" }
+        },
+        "required": ["description", "status"]
+      }
+    },
+    "filesVerified": { "type": "array", "items": { "type": "string" } },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "keyDecisions": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["taskId", "overallStatus", "checks"]
+}

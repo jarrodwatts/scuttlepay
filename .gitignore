@@ -29,5 +29,8 @@ pnpm-debug.log*
 # drizzle
 drizzle/*.sql
 
+# dev-cycle runtime state
+.dev-cycle/
+
 # ide
 .idea

@@ -75,7 +75,7 @@ The difference from "scope cut": every row above has the **same architecture**. 
 | Blockchain | Base Sepolia (testnet) → Base mainnet | USDC, 2s finality, ~$0.001 fees. |
 | Validation | zod | Shared schemas across MCP + tRPC. Single source of truth for domain types. tRPC uses zod natively for input validation. |
 | Auth (dashboard) | NextAuth v5 (Auth.js) | Discord OAuth for dashboard. Session-based. Drizzle adapter for DB persistence. |
-| Auth (MCP/programmatic) | API key middleware (tRPC) | Bearer token auth for MCP server and external clients. SHA-256 hashed, stored in DB. |
+| Auth (MCP/programmatic) | API key middleware (Route Handlers) | Bearer token auth for MCP server and external clients. SHA-256 hashed, stored in DB. Shared validation utility used by Route Handlers and tRPC. |
 | Env Validation | `@t3-oss/env-nextjs` | Zod-validated env vars. Fails fast on missing config. Type-safe `env` object. |
 | Shared Types | `@scuttlepay/shared` workspace package | Domain types, zod schemas, error classes, constants. Used by both main app and MCP package. |
 
@@ -99,57 +99,47 @@ The difference from "scope cut": every row above has the **same architecture**. 
                   │ (stdio transport)
 ┌─────────────────▼───────────────────────────────────────┐
 │              ScuttlePay MCP Server (packages/mcp)        │
-│  Thin orchestration layer — delegates to tRPC API        │
+│  Thin orchestration layer — calls Route Handlers         │
 │                                                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐ │
 │  │  Product      │  │  Payment     │  │  Wallet       │ │
 │  │  Tools        │  │  Tools       │  │  Tools        │ │
-│  │              │  │              │  │               │ │
-│  │  Calls tRPC  │  │  Calls tRPC  │  │  Calls tRPC   │ │
-│  │  HTTP API    │  │  HTTP API    │  │  HTTP API     │ │
 │  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘ │
 └─────────┼─────────────────┼───────────────────┼─────────┘
           │                 │                   │
           └─────────────────┼───────────────────┘
-                            │ (HTTP + API key via tRPC endpoint)
+                            │ (HTTP + API key → Next.js Route Handlers)
 ┌───────────────────────────▼─────────────────────────────┐
-│          ScuttlePay — T3 Next.js App (src/)              │
-│          tRPC + NextAuth + Drizzle — single deployment   │
+│         ScuttlePay Next.js App (root)                    │
+│         T3 Stack: Next.js + tRPC + Drizzle + NextAuth    │
 │                                                         │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │              tRPC API (src/server/api/)           │    │
-│  │                                                   │    │
-│  │  Auth: NextAuth session (dashboard)               │    │
-│  │        OR API key (MCP/programmatic)              │    │
-│  │                                                   │    │
-│  │  ┌───────────┐ ┌───────────┐ ┌────────────────┐  │    │
-│  │  │ wallet    │ │ purchase  │ │ product        │  │    │
-│  │  │ router    │ │ router    │ │ router         │  │    │
-│  │  └─────┬─────┘ └─────┬─────┘ └──────┬─────────┘  │    │
-│  │        │             │              │             │    │
-│  │  ┌─────▼─────────────▼──────────────▼──────────┐  │    │
-│  │  │           Service Layer (src/server/)        │  │    │
-│  │  │  wallet.service · payment.service            │  │    │
-│  │  │  shopify.service · spending.service           │  │    │
-│  │  │  purchase.service                            │  │    │
-│  │  └──────────────────┬───────────────────────────┘  │    │
-│  └─────────────────────┼─────────────────────────────┘    │
-│                        │                                  │
-│  ┌─────────────────────▼───────────────────────────────┐  │
-│  │           PostgreSQL via Drizzle (src/server/db/)    │  │
-│  │  scuttlepay_users, scuttlepay_wallets,              │  │
-│  │  scuttlepay_transactions, scuttlepay_orders,        │  │
-│  │  scuttlepay_api_keys, scuttlepay_spending_policies  │  │
-│  │  + NextAuth tables (accounts, sessions, etc.)       │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │           Dashboard UI (src/app/)                    │  │
-│  │  Next.js App Router + shadcn/ui + Tailwind v4       │  │
-│  │  tRPC hooks (useQuery/useMutation) for data          │  │
-│  │  Pages: wallet, transactions, setup, landing         │  │
-│  └─────────────────────────────────────────────────────┘  │
-└──────────┬──────────────────┬─────────────────────────────┘
+│  ┌─ Dashboard (App Router) ──────────────────────────┐  │
+│  │  NextAuth sessions — protectedProcedure            │  │
+│  │  Pages: wallet, transactions, setup, landing       │  │
+│  │  Uses tRPC React Query hooks                       │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─ API Layer ─────────────────────────────────────────┐  │
+│  │  tRPC Routers (src/server/api/routers/)            │  │
+│  │    wallet.router  product.router  purchase.router  │  │
+│  │  Route Handlers (src/app/api/mcp/)                 │  │
+│  │    /api/mcp/wallet  /products  /purchase  /txns    │  │
+│  └──────────────────────┬────────────────────────────┘  │
+│                         │                               │
+│  ┌─ Service Layer (src/server/services/) ────────────┐  │
+│  │  wallet.service    payment.service                 │  │
+│  │  shopify.service   spending.service                │  │
+│  │  purchase.service  (orchestrator)                  │  │
+│  └──────────────────────┬────────────────────────────┘  │
+│                         │                               │
+│  ┌──────────────────────▼────────────────────────────┐  │
+│  │           Neon PostgreSQL (Drizzle ORM)            │  │
+│  │  scuttlepay_* tables (pgTableCreator prefix)       │  │
+│  │  users, accounts, sessions (NextAuth)              │  │
+│  │  api_keys, wallets, spending_policies,             │  │
+│  │  transactions, orders (domain)                     │  │
+│  └───────────────────────────────────────────────────┘  │
+└─────────┬─────────────────┬─────────────────────────────┘
            │                  │
            ▼                  ▼
     ┌──────────┐     ┌──────────────┐
@@ -166,21 +156,22 @@ The difference from "scope cut": every row above has the **same architecture**. 
 
 ### Key Architectural Boundaries
 
-**1. T3 monolith for dashboard + API**: The Next.js app hosts both the dashboard UI and tRPC API. The dashboard calls tRPC procedures directly (type-safe, no HTTP overhead in RSC). External clients (MCP server) call the same tRPC procedures via the HTTP handler at `/api/trpc`.
+**1. T3 monolith for dashboard + API**: The Next.js app hosts both the dashboard UI and tRPC API. The dashboard calls tRPC procedures directly (type-safe, no HTTP overhead in RSC). External clients (MCP server) call Next.js Route Handlers at `/api/mcp/*` (REST endpoints with API key auth) which invoke the same service layer.
 
-**2. MCP is a thin client**: The MCP server is a **transport adapter**, not a business logic host. It translates MCP tool calls into tRPC HTTP requests. This means:
-- All business logic (spending checks, payment orchestration, order creation) lives in tRPC routers + services
-- The dashboard uses tRPC hooks directly; the MCP server uses tRPC's HTTP endpoint
+**2. MCP is a thin client**: The MCP server is a **transport adapter**, not a business logic host. It translates MCP tool calls into HTTP requests to Next.js Route Handlers at `/api/mcp/*`. This means:
+- All business logic (spending checks, payment orchestration, order creation) lives in the service layer
+- The dashboard uses tRPC hooks directly; the MCP server uses Route Handlers (REST + API key)
+- Both resolve to the same service layer — identical business logic regardless of caller
 - Testing the payment flow doesn't require spinning up an MCP server
-- Post-hackathon, other interfaces (CLI, SDK, webhooks) call the same tRPC API
+- Post-hackathon, other interfaces (CLI, SDK, webhooks) call the same service layer via Route Handlers or tRPC
 
-**3. Dual auth**: NextAuth handles dashboard sessions (Discord OAuth). API keys handle MCP/programmatic access. Both resolve to a user context that tRPC procedures consume.
+**3. Dual auth**: NextAuth handles dashboard sessions (Discord OAuth). API keys handle MCP/programmatic access. Both resolve to a user context that the service layer consumes.
 
 ### Payment Flow (what happens when agent calls `buy()`)
 
 1. MCP `buy` tool receives `(productId, variantId?, quantity?)` from agent
-2. MCP calls the `purchase.execute` tRPC procedure via HTTP (with API key in header)
-3. tRPC middleware validates API key, resolves user + wallet context
+2. MCP calls the `/api/mcp/purchase` Route Handler via HTTP (with API key in header)
+3. Route Handler middleware validates API key, resolves user + wallet context
 4. `purchase.service` fetches product from Shopify Storefront API (price, variant)
 5. `purchase.service` checks: wallet balance >= product price (via thirdweb/on-chain query)
 6. `spending.service` evaluates spending policies (per-tx max, daily cap, queried from DB)
@@ -243,7 +234,7 @@ verificationTokens
 
 ```
 scuttlepay_api_keys
-├── id              varchar(255) PK (cuid2)
+├── id              varchar(255) PK (crypto.randomUUID())
 ├── userId          varchar(255) FK → users.id
 ├── keyHash         text NOT NULL (SHA-256 hash)
 ├── keyPrefix       varchar(20) NOT NULL (first 8 chars, for display: "sk_test_abc1...")
@@ -254,7 +245,7 @@ scuttlepay_api_keys
 └── expiresAt       timestamptz (nullable)
 
 scuttlepay_wallets
-├── id              varchar(255) PK (cuid2)
+├── id              varchar(255) PK (crypto.randomUUID())
 ├── userId          varchar(255) FK → users.id
 ├── address         varchar(255) (on-chain wallet address)
 ├── chainId         integer DEFAULT 84532 (84532 = Base Sepolia)
@@ -265,7 +256,7 @@ scuttlepay_wallets
 └── updatedAt       timestamptz
 
 scuttlepay_spending_policies
-├── id              varchar(255) PK (cuid2)
+├── id              varchar(255) PK (crypto.randomUUID())
 ├── walletId        varchar(255) FK → wallets.id
 ├── maxPerTx        numeric(20,6) (USDC, 6 decimals)
 ├── dailyLimit      numeric(20,6)
@@ -276,7 +267,7 @@ scuttlepay_spending_policies
 └── updatedAt       timestamptz
 
 scuttlepay_transactions
-├── id              varchar(255) PK (cuid2)
+├── id              varchar(255) PK (crypto.randomUUID())
 ├── walletId        varchar(255) FK → wallets.id
 ├── type            varchar(50) ('purchase' | 'fund' | 'refund')
 ├── status          varchar(50) ('pending' | 'settling' | 'settled' | 'failed')
@@ -293,7 +284,7 @@ scuttlepay_transactions
 └── createdAt       timestamptz DEFAULT now()
 
 scuttlepay_orders
-├── id              varchar(255) PK (cuid2)
+├── id              varchar(255) PK (crypto.randomUUID())
 ├── transactionId   varchar(255) FK → transactions.id
 ├── walletId        varchar(255) FK → wallets.id
 ├── shopifyOrderId  varchar(255) (nullable)
@@ -318,7 +309,7 @@ scuttlepay_orders
 - `metadata jsonb` on transactions: escape hatch for data we don't want to model yet (facilitator response, gas info, etc.)
 - All timestamps are `timestamptz` — financial data needs timezone-aware timestamps
 - Column naming uses camelCase in Drizzle code (maps to snake_case in DB via Drizzle conventions)
-- IDs use `cuid2` via `$defaultFn(() => createId())` — URL-safe, collision-resistant, sortable
+- IDs use `crypto.randomUUID()` via `$defaultFn(() => crypto.randomUUID())` — standard UUID v4, no external dependency
 - `users` table is shared between NextAuth and ScuttlePay domain — NextAuth manages the base user row, ScuttlePay links to it via foreign keys
 
 ---
@@ -337,8 +328,7 @@ src/server/
 │   └── routers/
 │       ├── wallet.ts          # Wallet balance/address queries
 │       ├── product.ts         # Product search/details (Shopify)
-│       ├── purchase.ts        # Execute purchase, list transactions
-│       └── post.ts            # Placeholder (T3 default — to remove)
+│       └── purchase.ts        # Execute purchase, list transactions
 ├── services/
 │   ├── wallet.service.ts      # Wallet CRUD, balance queries (wraps thirdweb)
 │   ├── payment.service.ts     # x402 signing, settlement orchestration
@@ -347,16 +337,22 @@ src/server/
 │   └── purchase.service.ts    # Orchestrates the full buy flow (calls other services)
 ├── lib/
 │   ├── thirdweb.ts            # thirdweb SDK client init
-│   └── shopify.ts             # Shopify API client init
+│   ├── shopify.ts             # Shopify API client init
+│   └── api-key.ts             # API key generation, hashing, verification
 ├── auth/
 │   ├── config.ts              # NextAuth configuration (Discord, Drizzle adapter)
 │   └── index.ts               # NextAuth instance (auth, signIn, signOut)
 └── db/
-    ├── schema.ts              # Drizzle schema (all tables + relations)
+    ├── schema/                # Drizzle schema (split by domain)
+    │   ├── index.ts           # Barrel exports + table creator
+    │   ├── table-creator.ts   # pgTableCreator with scuttlepay_ prefix
+    │   ├── auth.ts            # NextAuth tables (users, accounts, sessions, verificationTokens)
+    │   ├── api-key.ts         # API key table
+    │   ├── wallet.ts          # Wallet + spending policy tables
+    │   ├── transaction.ts     # Transaction + order tables
+    │   └── relations.ts       # All table relations
     ├── index.ts               # DB client + connection (postgres.js driver)
-    ├── seed.ts                # Seed script (demo user, wallet, API key)
-    └── lib/
-        └── api-key.ts         # API key generation, hashing, verification
+    └── seed.ts                # Seed script (demo user, wallet, API key)
 ```
 
 ### tRPC Router ↔ Service Layer Relationship
@@ -389,10 +385,10 @@ Each service owns its own domain logic and external API calls. No service calls 
 
 ### Auth Strategy (Dual Auth)
 
-tRPC procedures support two auth modes via middleware:
+Two auth modes serve different callers:
 
-1. **Session auth** (dashboard): NextAuth session cookie → resolves to user. Used by `protectedProcedure`.
-2. **API key auth** (MCP/programmatic): `Authorization: Bearer sk_test_...` → SHA-256 hash → lookup in `api_keys` table → resolves to user. Used by `apiKeyProcedure`.
+1. **Session auth** (dashboard): NextAuth session cookie → resolves to user. Used by tRPC `protectedProcedure`.
+2. **API key auth** (MCP/programmatic): `Authorization: Bearer sk_test_...` → SHA-256 hash → lookup in `api_keys` table → resolves to user. Used by Route Handler middleware at `/api/mcp/*`.
 
 Both produce the same context: `{ userId, walletId }`. Services are auth-agnostic — they receive a wallet ID and operate on it.
 
@@ -410,7 +406,7 @@ class ScuttlePayError extends Error {
 
 Error codes: `INSUFFICIENT_BALANCE`, `SPENDING_LIMIT_EXCEEDED`, `PAYMENT_FAILED`, `PRODUCT_NOT_FOUND`, `ORDER_CREATION_FAILED`, `UNAUTHORIZED`, `WALLET_NOT_FOUND`, `INVALID_API_KEY`, `POLICY_VIOLATION`, `SHOPIFY_ERROR`, `THIRDWEB_ERROR`, `INTERNAL_ERROR`.
 
-tRPC error formatting in `src/server/api/trpc.ts` catches `ScuttlePayError` and maps to appropriate tRPC error codes. The MCP server translates these into human-readable messages for the agent via `toAgentMessage()`. The dashboard displays them as appropriate UI states.
+tRPC error formatting in `src/server/api/trpc.ts` catches `ScuttlePayError` and maps to appropriate tRPC error codes for the dashboard. Route Handlers at `/api/mcp/*` catch `ScuttlePayError` and return JSON error responses. The MCP server translates these into human-readable messages for the agent via `toAgentMessage()`. The dashboard displays them as appropriate UI states.
 
 External service failures (thirdweb down, Shopify rate-limited) are wrapped in `ScuttlePayError` with `retriable: boolean` so callers know whether to retry.
 
@@ -468,11 +464,11 @@ Epic 1: Foundation (DONE)    Epic 2: Wallet       Epic 3: Shopify
 - Next.js 15 App Router + tRPC v11 + Drizzle ORM + NextAuth v5
 - `packages/shared` with domain types, zod schemas, error classes, constants
 - `packages/mcp` placeholder with workspace dependency on shared
-- Full DB schema in `src/server/db/schema.ts` (all 6 domain tables + NextAuth tables)
+- Full DB schema in `src/server/db/schema/` (all 6 domain tables + NextAuth tables, split by domain)
 - Seed script in `src/server/db/seed.ts`
 - tRPC skeleton with `publicProcedure` and `protectedProcedure`
 - NextAuth with Discord provider + Drizzle adapter
-- API key utilities in `src/server/db/lib/api-key.ts` (generate, hash, verify)
+- API key utilities in `src/server/lib/api-key.ts` (generate, hash, verify with environment-aware prefix: `sk_live_` / `sk_test_`)
 - T3 env validation via `@t3-oss/env-nextjs`
 - shadcn/ui components (button, card, table, badge)
 
@@ -512,9 +508,9 @@ Epic 1: Foundation (DONE)    Epic 2: Wallet       Epic 3: Shopify
 **What**: Drizzle ORM schema with all domain tables + NextAuth tables.
 
 **Completed deliverables**:
-- `src/server/db/schema.ts`: All 6 ScuttlePay tables + 4 NextAuth tables with `scuttlepay_` prefix via `pgTableCreator`
+- `src/server/db/schema/`: All 6 ScuttlePay tables + 4 NextAuth tables with `scuttlepay_` prefix via `pgTableCreator`, split by domain (auth, api-key, wallet, transaction, relations)
 - `src/server/db/index.ts`: Drizzle instance with `postgres.js` driver, global connection caching in dev
-- `drizzle.config.ts`: Points to schema, `tablesFilter: ["scuttlepay_*"]`
+- `drizzle.config.ts`: Points to `./src/server/db/schema` directory, `tablesFilter: ["scuttlepay_*"]`
 - Relations defined for all tables
 
 ---
@@ -525,7 +521,7 @@ Epic 1: Foundation (DONE)    Epic 2: Wallet       Epic 3: Shopify
 
 **Completed deliverables**:
 - `src/server/db/seed.ts`: Creates demo user, API key (SHA-256 hashed), wallet, spending policy
-- `src/server/db/lib/api-key.ts`: `generateApiKey()`, `hashApiKey()`, `verifyApiKey()` (timing-safe comparison)
+- `src/server/lib/api-key.ts`: `generateApiKey()`, `hashApiKey()`, `verifyApiKey()` (timing-safe comparison)
 - `pnpm db:seed` script in `package.json`
 
 ---
@@ -536,8 +532,7 @@ Epic 1: Foundation (DONE)    Epic 2: Wallet       Epic 3: Shopify
 
 **Completed deliverables**:
 - `src/server/api/trpc.ts`: Context (db, session, headers), SuperJSON transformer, ZodError formatting
-- `src/server/api/root.ts`: App router with `createCaller` factory
-- `src/server/api/routers/post.ts`: Placeholder router (T3 default)
+- `src/server/api/root.ts`: App router with `createCaller` factory, health check query
 - `src/app/api/trpc/[trpc]/route.ts`: tRPC HTTP handler
 - `src/trpc/react.tsx`: TRPCReactProvider with TanStack Query + httpBatchStreamLink
 - `src/trpc/server.ts`: Server-side RSC helpers with `createHydrationHelpers`
@@ -581,23 +576,31 @@ All verified:
 
 **Why before payment/shopping**: The wallet is the core primitive. You can't build payments without a wallet that has a balance. This epic gives us a funded wallet and the ability to check its balance through the API.
 
-**Prerequisite**: Add tRPC `apiKeyProcedure` middleware (validates API keys for MCP/programmatic access). This is needed for MCP to call wallet procedures.
+**Prerequisite**: Add API key validation middleware (validates API keys for MCP/programmatic access). This is needed for MCP Route Handlers and any future programmatic callers.
 
 ---
 
-### Task 2.0: API Key tRPC Middleware
+### Task 2.0: API Key Auth Middleware
 
-**What**: tRPC middleware that validates API keys for MCP/programmatic access, complementing NextAuth session auth.
+**What**: Shared API key validation for Route Handlers (MCP) and tRPC (future programmatic callers), complementing NextAuth session auth.
 
 **Deliverables**:
 
-Update `src/server/api/trpc.ts`:
-- Add `apiKeyProcedure` — reads `Authorization: Bearer sk_...` from request headers
+Create `src/server/lib/validate-api-key.ts`:
+- `validateApiKey(authHeader: string)` → `{ userId, walletId }` or throws
+  - Reads `Authorization: Bearer sk_...` from header
   - SHA-256 hashes the key, looks up in `api_keys` table (active, not expired)
-  - Resolves `userId` and default `walletId` into tRPC context
+  - Resolves `userId` and default `walletId`
   - Updates `lastUsedAt` on the API key row (fire-and-forget)
-  - Throws `TRPCError({ code: 'UNAUTHORIZED' })` if invalid
-- Add `authedProcedure` — accepts EITHER NextAuth session OR API key
+  - Throws if invalid/missing/expired
+
+Create `src/app/api/mcp/` Route Handlers:
+- Shared middleware wrapper that calls `validateApiKey()` and injects user context
+- Route Handlers: `purchase/route.ts`, `products/route.ts`, `wallet/route.ts`, `transactions/route.ts`
+- Each handler delegates to the service layer (same services tRPC routers use)
+
+Update `src/server/api/trpc.ts`:
+- Add `authedProcedure` — accepts EITHER NextAuth session OR API key (via `validateApiKey`)
   - Checks session first (cheaper, no DB call if cookie present)
   - Falls back to API key check
   - Sets `userId` and `walletId` in context regardless of auth method
@@ -608,15 +611,15 @@ Update `src/env.js`:
 - Add chain env vars: `CHAIN_ENV`, `DEFAULT_MAX_PER_TX`, `DEFAULT_DAILY_LIMIT`
 
 **Verification**:
-- [ ] tRPC procedure with `apiKeyProcedure` → valid API key from seed → resolves user context
-- [ ] Invalid/missing API key → `UNAUTHORIZED` error
-- [ ] `authedProcedure` works with NextAuth session (browser)
-- [ ] `authedProcedure` works with API key (curl/MCP)
+- [ ] Route Handler `GET /api/mcp/wallet` with valid API key from seed → returns wallet data
+- [ ] Route Handler with invalid/missing API key → `401 UNAUTHORIZED` JSON error
+- [ ] `authedProcedure` tRPC works with NextAuth session (browser)
+- [ ] `authedProcedure` tRPC works with API key (curl)
 - [ ] `lastUsedAt` updates after valid API key request
 - [ ] `pnpm typecheck` passes
 
 **Dependencies**: Task 1.6 (seed script creates API key, auth utilities exist)
-**Files**: `src/server/api/trpc.ts`, `src/env.js`
+**Files**: `src/server/lib/validate-api-key.ts`, `src/app/api/mcp/*/route.ts`, `src/server/api/trpc.ts`, `src/env.js`
 
 ---
 
@@ -993,13 +996,13 @@ The full payment loop works end-to-end via tRPC:
 
 ## Epic 5: MCP Server
 
-**Goal**: MCP server that wraps the tRPC API. Agent says "buy me shoes" and it works.
+**Goal**: MCP server that calls Route Handlers at `/api/mcp/*`. Agent says "buy me shoes" and it works.
 
 ---
 
-### Task 5.1: MCP Server Scaffold + tRPC HTTP Client
+### Task 5.1: MCP Server Scaffold + HTTP Client
 
-**What**: MCP server setup with HTTP client calling tRPC procedures via the `/api/trpc` endpoint.
+**What**: MCP server setup with HTTP client calling Next.js Route Handlers at `/api/mcp/*`.
 
 **Deliverables**:
 
@@ -1008,13 +1011,16 @@ The full payment loop works end-to-end via tRPC:
 - Validate on startup, fail fast with clear error if missing
 
 `packages/mcp/src/api-client.ts`:
-- HTTP client for the ScuttlePay tRPC API
+- HTTP client for the ScuttlePay Route Handlers at `/api/mcp/*`
 - Sets `Authorization: Bearer <key>` on all requests
-- Calls tRPC procedures via HTTP batch endpoint (`POST /api/trpc/<procedure>`)
-  - Queries: GET with URL-encoded input
-  - Mutations: POST with JSON body
-- SuperJSON deserialization (matches tRPC server config)
-- Error handling: parses tRPC error responses, extracts `ScuttlePayError` from error data
+- Calls Route Handlers via REST:
+  - `GET /api/mcp/products?q=...` — product search
+  - `GET /api/mcp/products/:id` — product details
+  - `POST /api/mcp/purchase` — execute purchase
+  - `GET /api/mcp/wallet` — balance and address
+  - `GET /api/mcp/transactions` — transaction history
+- JSON request/response (no SuperJSON — Route Handlers use plain JSON)
+- Error handling: parses error responses, extracts `ScuttlePayError` from error data
 - Typed methods: `searchProducts()`, `getProduct()`, `purchase()`, `getBalance()`, `getTransactions()`
 
 `packages/mcp/src/index.ts`:
@@ -1025,7 +1031,7 @@ The full payment loop works end-to-end via tRPC:
 **Verification**:
 - [ ] MCP server starts without errors when env vars are set
 - [ ] MCP server fails fast with clear message when env vars are missing
-- [ ] API client can call `wallet.getBalance` via HTTP and get a response
+- [ ] API client can call `GET /api/mcp/wallet` via HTTP and get a response
 - [ ] API client correctly sets auth header
 - [ ] `pnpm build` succeeds for `packages/mcp`
 
@@ -1044,14 +1050,14 @@ The full payment loop works end-to-end via tRPC:
 - Tool name: `search_products`
 - Description: "Search for products available for purchase. Returns product names, prices in USDC, and IDs. Use a product ID from the results to get details or buy."
 - Input schema: `{ query: string }` (zod from shared)
-- Calls `apiClient.searchProducts(query)` (→ `product.search` tRPC procedure)
+- Calls `apiClient.searchProducts(query)` (→ `GET /api/mcp/products?q=...`)
 - Returns formatted list: each product as `"[name] — $[price] USDC (ID: [id])"`
 
 `packages/mcp/src/tools/product.ts`:
 - Tool name: `get_product`
 - Description: "Get detailed information about a specific product including all variants, descriptions, images, and exact pricing."
 - Input schema: `{ productId: string }` (zod from shared)
-- Calls `apiClient.getProduct(productId)` (→ `product.getById` tRPC procedure)
+- Calls `apiClient.getProduct(productId)` (→ `GET /api/mcp/products/:id`)
 - Returns formatted product details with all variants and prices
 
 **Verification**:
@@ -1075,7 +1081,7 @@ The full payment loop works end-to-end via tRPC:
 - Tool name: `buy`
 - Description: "Purchase a product using your ScuttlePay wallet. Pays with USDC via x402 protocol. Returns order confirmation with blockchain transaction hash."
 - Input schema: `{ productId: string, variantId?: string, quantity?: number }` (zod from shared)
-- Calls `apiClient.purchase({ productId, variantId, quantity })` (→ `purchase.execute` tRPC mutation)
+- Calls `apiClient.purchase({ productId, variantId, quantity })` (→ `POST /api/mcp/purchase`)
 - On success: returns formatted confirmation — "Purchased [product] for $[amount] USDC. Order #[number]. Transaction: [txHash] (verify on Basescan: [link])"
 - On error: translates each error code to agent-friendly message using `toAgentMessage()`:
   - `INSUFFICIENT_BALANCE` → "Insufficient balance: you have $X but this costs $Y"
@@ -1104,14 +1110,14 @@ The full payment loop works end-to-end via tRPC:
 - Tool name: `get_balance`
 - Description: "Check your current ScuttlePay wallet balance in USDC."
 - No input params
-- Calls `apiClient.getBalance()` (→ `wallet.getBalance` tRPC query)
+- Calls `apiClient.getBalance()` (→ `GET /api/mcp/wallet`)
 - Returns: "Your ScuttlePay balance is $[amount] USDC"
 
 `packages/mcp/src/tools/transactions.ts`:
 - Tool name: `get_transactions`
 - Description: "View recent purchase history including amounts, products, status, and blockchain transaction hashes."
 - Input schema: `{ limit?: number }` (default 10)
-- Calls `apiClient.getTransactions(limit)` (→ `transaction.list` tRPC query)
+- Calls `apiClient.getTransactions(limit)` (→ `GET /api/mcp/transactions?limit=...`)
 - Returns formatted list: each as `"[date] — [product] — $[amount] USDC — [status] — tx: [hash]"`
 - If no transactions: "No transactions yet."
 
@@ -1323,7 +1329,7 @@ Update `src/app/page.tsx`:
 - Storefront API token and Admin API token configured in `.env`
 
 **Verification**:
-- [ ] `GET /api/products?q=headphones` returns relevant products
+- [ ] `product.search({ q: "headphones" })` tRPC query returns relevant products
 - [ ] All products have images and descriptions
 - [ ] Prices are within demo range ($0.50-$5.00)
 
@@ -1342,7 +1348,7 @@ Update `src/app/page.tsx`:
 - Documented: how to switch to backup wallet, how to refund from faucet
 
 **Verification**:
-- [ ] `GET /api/wallet/balance` returns ~100 USDC
+- [ ] `wallet.getBalance` tRPC query returns ~100 USDC
 - [ ] Can make multiple purchases without hitting daily limit for demo
 - [ ] Backup wallet can be swapped by changing env var
 
@@ -1591,9 +1597,9 @@ Update `src/app/page.tsx`:
 - **End-to-end type safety**: Dashboard imports router types directly — no manual API client, no schema drift
 - **Server Components**: tRPC's RSC support (via `createHydrationHelpers`) enables server-side data fetching with type safety
 - **Single deployment**: tRPC runs inside Next.js API routes — no separate Hono server to deploy/manage
-- **MCP still works**: tRPC exposes an HTTP endpoint (`/api/trpc`) that the MCP server calls, same as Hono would
+- **MCP still works**: Next.js Route Handlers at `/api/mcp/*` provide REST endpoints for the MCP server, calling the same service layer as tRPC routers
 - **Less code**: No custom middleware stack, no request ID generation, no error handler — tRPC handles it
-- Trade-off: MCP must serialize/deserialize SuperJSON (tRPC's transformer), not plain JSON. Manageable.
+- Trade-off: Two API surfaces (tRPC for dashboard, Route Handlers for MCP). Both call the same service layer, so business logic is never duplicated.
 
 **Why NextAuth over API-key-only auth (changed from original spec)?**
 - Dashboard auth is built-in from day 1 (Discord OAuth, expandable to Google)
@@ -1612,7 +1618,7 @@ Update `src/app/page.tsx`:
 - Business logic in tRPC means the dashboard and MCP share the same behavior
 - Testing doesn't require MCP transport layer
 - Other future interfaces (CLI, SDK, webhooks) reuse the same tRPC API
-- MCP is a transport adapter: it translates tool calls → tRPC HTTP. That's it.
+- MCP is a transport adapter: it translates tool calls → HTTP calls to Route Handlers at `/api/mcp/*`. That's it.
 
 **Why combined MCP (not modular)?**
 - One config entry for the agent (simpler setup)
@@ -1691,8 +1697,13 @@ scuttlepay/
 │   │   ├── api/
 │   │   │   ├── auth/[...nextauth]/
 │   │   │   │   └── route.ts             # NextAuth route handler
-│   │   │   └── trpc/[trpc]/
-│   │   │       └── route.ts             # tRPC HTTP handler (MCP calls this)
+│   │   │   ├── trpc/[trpc]/
+│   │   │   │   └── route.ts             # tRPC HTTP handler (dashboard calls this)
+│   │   │   └── mcp/                     # MCP-facing Route Handlers (API key auth)
+│   │   │       ├── purchase/route.ts    # POST /api/mcp/purchase
+│   │   │       ├── products/route.ts    # GET /api/mcp/products
+│   │   │       ├── wallet/route.ts      # GET /api/mcp/wallet
+│   │   │       └── transactions/route.ts # GET /api/mcp/transactions
 │   │   └── dashboard/
 │   │       ├── layout.tsx                # Dashboard layout (sidebar/nav, session guard)
 │   │       ├── page.tsx                  # Wallet overview
@@ -1718,16 +1729,23 @@ scuttlepay/
 │   │   │   └── purchase.service.ts       # Orchestrates the full buy flow
 │   │   ├── lib/
 │   │   │   ├── thirdweb.ts               # thirdweb SDK client init
-│   │   │   └── shopify.ts                # Shopify API client init (Storefront + Admin)
+│   │   │   ├── shopify.ts                # Shopify API client init (Storefront + Admin)
+│   │   │   ├── api-key.ts               # API key generation, hashing, verification
+│   │   │   └── validate-api-key.ts      # API key validation middleware (shared by Route Handlers + tRPC)
 │   │   ├── auth/
 │   │   │   ├── config.ts                 # NextAuth configuration (Discord, Drizzle adapter)
 │   │   │   └── index.ts                  # Cached auth(), signIn, signOut exports
 │   │   └── db/
-│   │       ├── schema.ts                 # Drizzle schema (domain + NextAuth tables)
+│   │       ├── schema/                   # Drizzle schema (split by domain)
+│   │       │   ├── index.ts             # Barrel exports + table creator
+│   │       │   ├── table-creator.ts     # pgTableCreator (scuttlepay_ prefix)
+│   │       │   ├── auth.ts             # NextAuth tables
+│   │       │   ├── api-key.ts          # API key table
+│   │       │   ├── wallet.ts           # Wallet + spending policy tables
+│   │       │   ├── transaction.ts      # Transaction + order tables
+│   │       │   └── relations.ts        # All table relations
 │   │       ├── index.ts                  # DB client + connection (postgres.js)
-│   │       ├── seed.ts                   # Seed script (demo user, wallet, API key)
-│   │       └── lib/
-│   │           └── api-key.ts            # API key generation, hashing, verification
+│   │       └── seed.ts                   # Seed script (demo user, wallet, API key)
 │   │
 │   ├── trpc/                             # tRPC client setup
 │   │   ├── react.tsx                     # TRPCReactProvider (client-side)
@@ -1756,7 +1774,7 @@ scuttlepay/
 │   │   │   │   ├── buy.ts               # buy tool
 │   │   │   │   ├── balance.ts            # get_balance tool
 │   │   │   │   └── transactions.ts       # get_transactions tool
-│   │   │   ├── api-client.ts             # HTTP client for tRPC API
+│   │   │   ├── api-client.ts             # HTTP client for Route Handlers (/api/mcp/*)
 │   │   │   └── config.ts                 # Env var parsing (API URL, key)
 │   │   ├── package.json
 │   │   └── tsconfig.json
@@ -1817,9 +1835,10 @@ AUTH_DISCORD_ID=...           # Discord OAuth app client ID
 AUTH_DISCORD_SECRET=...       # Discord OAuth app client secret
 
 # thirdweb
-THIRDWEB_SECRET_KEY=...
-THIRDWEB_CLIENT_ID=...
-THIRDWEB_WALLET_ID=...        # Pre-created server wallet ID
+THIRDWEB_SECRET_KEY=...       # Added in Task 2.0
+THIRDWEB_CLIENT_ID=...        # Added in Task 2.0
+THIRDWEB_WALLET_ID=...        # Pre-created server wallet ID (in env.js now)
+THIRDWEB_WALLET_ADDRESS=...   # Server wallet on-chain address (in env.js now)
 
 # Shopify
 SHOPIFY_STORE_URL=https://your-store.myshopify.com
@@ -1836,7 +1855,7 @@ DEFAULT_DAILY_LIMIT=50
 
 **MCP Server env** (separate from Next.js app, set in MCP config):
 ```env
-SCUTTLEPAY_API_URL=http://localhost:3000  # Next.js app URL (tRPC endpoint)
+SCUTTLEPAY_API_URL=http://localhost:3000  # Next.js app URL (Route Handlers at /api/mcp/*)
 SCUTTLEPAY_API_KEY=sk_test_...            # API key from seed script
 ```
 
@@ -1856,7 +1875,7 @@ SCUTTLEPAY_API_KEY=sk_test_...            # API key from seed script
 | Product search | `product.search({ q: "shoes" })` → Shopify products returned |
 | Purchase flow | `purchase.execute({ productId })` → tx settles on Base Sepolia → tx hash on Basescan |
 | Spending limits | Buy above max_per_tx → `SPENDING_LIMIT_EXCEEDED` error |
-| MCP works | Claude Code: "search for products" → products returned via MCP |
-| MCP buy | Claude Code: "buy the [product]" → purchase completes, balance decreases |
+| MCP works | Claude Code: "search for products" → products returned via MCP (calls `/api/mcp/products`) |
+| MCP buy | Claude Code: "buy the [product]" → purchase completes via MCP (calls `/api/mcp/purchase`), balance decreases |
 | Dashboard realtime | Agent buys → transaction appears in dashboard within 5s (2s polling) |
 | E2E demo | 3-minute script runs cleanly 3 times in a row |
