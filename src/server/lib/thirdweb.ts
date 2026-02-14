@@ -1,10 +1,11 @@
 import { createThirdwebClient, Engine } from "thirdweb";
 import { baseSepolia, base } from "thirdweb/chains";
+import { BASE_MAINNET, BASE_SEPOLIA, type SupportedChainId } from "@scuttlepay/shared";
 import { env } from "~/env";
 
-export const activeChain = env.CHAIN_ENV === "mainnet" ? base : baseSepolia;
-
-export { baseSepolia as baseSepoliaChain };
+const isMainnet = env.NEXT_PUBLIC_CHAIN_ENV === "mainnet";
+export const activeChain = isMainnet ? base : baseSepolia;
+export const chainId: SupportedChainId = isMainnet ? BASE_MAINNET : BASE_SEPOLIA;
 
 let _client: ReturnType<typeof createThirdwebClient> | undefined;
 
@@ -25,6 +26,16 @@ export function getServerWallet(address: string) {
     address,
     chain: activeChain,
   });
+}
+
+export async function createUserServerWallet(
+  label: string,
+): Promise<{ address: string }> {
+  const result = await Engine.createServerWallet({
+    client: getThirdwebClient(),
+    label,
+  });
+  return { address: result.address };
 }
 
 export async function getServerWalletAddress(): Promise<string> {

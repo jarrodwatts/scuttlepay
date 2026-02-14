@@ -1,10 +1,55 @@
-import NextAuth from "next-auth";
+import { createAuth } from "thirdweb/auth";
+import { privateKeyToAccount } from "thirdweb/wallets";
+import { cookies } from "next/headers";
 import { cache } from "react";
+import { eq } from "drizzle-orm";
 
-import { authConfig } from "./config";
+import { getThirdwebClient } from "~/server/lib/thirdweb";
+import { env } from "~/env";
+import { db } from "~/server/db";
+import { users } from "~/server/db/schema";
 
-const { auth: uncachedAuth, handlers, signIn, signOut } = NextAuth(authConfig);
+export interface AuthUser {
+  id: string;
+  name: string | null;
+  email: string | null;
+  walletAddress: string;
+}
 
-const auth = cache(uncachedAuth);
+export const thirdwebAuth = createAuth({
+  domain: env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
+  adminAccount: privateKeyToAccount({
+    client: getThirdwebClient(),
+    privateKey: env.THIRDWEB_AUTH_PRIVATE_KEY,
+  }),
+  client: getThirdwebClient(),
+});
 
-export { auth, handlers, signIn, signOut };
+async function _getAuthUser(): Promise<AuthUser | null> {
+  const c = await cookies();
+  const jwt = c.get("jwt");
+  if (!jwt?.value) return null;
+
+  const result = await thirdwebAuth.verifyJWT({ jwt: jwt.value });
+  if (!result.valid) return null;
+
+  const walletAddress = result.parsedJWT.sub;
+  if (!walletAddress) return null;
+
+  const user = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.thirdwebUserId, walletAddress))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!user) return null;
+
+  return { ...user, walletAddress };
+}
+
+export const getAuthUser = cache(_getAuthUser);

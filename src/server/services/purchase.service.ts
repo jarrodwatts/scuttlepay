@@ -16,9 +16,11 @@ import * as shopifyService from "./shopify.service";
 import * as walletService from "./wallet.service";
 import * as spendingService from "./spending.service";
 import * as paymentService from "./payment.service";
+import { compareUsdc, multiplyUsdc } from "~/server/lib/usdc-math";
 
 interface PurchaseParams {
   walletId: string;
+  apiKeyId: string;
   productId: string;
   variantId?: string;
   quantity?: number;
@@ -65,70 +67,78 @@ function resolvePrice(
     unitPrice = variant.priceUsdc;
   }
 
-  const total = (Number(unitPrice) * quantity).toFixed(6);
+  const total = multiplyUsdc(unitPrice, quantity);
   return { unitPrice, totalUsdc: total };
 }
 
 export async function purchase(
   params: PurchaseParams,
 ): Promise<PurchaseResult> {
-  const { walletId, productId, variantId, quantity = 1 } = params;
+  const { walletId, apiKeyId, productId, variantId, quantity = 1 } = params;
   const merchantAddress = getMerchantAddress();
   const storeUrl = getStoreUrl();
 
-  // Step 1: Get product details
   const product = await shopifyService.getProduct(productId);
   const { unitPrice, totalUsdc } = resolvePrice(product, variantId, quantity);
 
-  // Step 2: Check balance
-  const balance = await walletService.getBalance(walletId);
-  if (Number(balance) < Number(totalUsdc)) {
-    throw new ScuttlePayError({
-      code: ErrorCode.INSUFFICIENT_BALANCE,
-      message: `Insufficient balance: have ${balance}, need ${totalUsdc}`,
-      metadata: { available: balance, required: totalUsdc },
-    });
-  }
+  // Serializable transaction: spending eval + pending tx insert.
+  // The DB isolation prevents concurrent purchases from exceeding spending limits.
+  // NOTE: The on-chain balance check is a best-effort pre-check only — it reads
+  // from an external RPC and is NOT covered by the DB transaction's isolation.
+  const txRow = await db.transaction(
+    async (tx) => {
+      const balance = await walletService.getBalance(walletId);
+      if (compareUsdc(balance, totalUsdc) < 0) {
+        throw new ScuttlePayError({
+          code: ErrorCode.INSUFFICIENT_BALANCE,
+          message: `Insufficient balance: have ${balance}, need ${totalUsdc}`,
+          metadata: { available: balance, required: totalUsdc },
+        });
+      }
 
-  // Step 3: Evaluate spending limits
-  const evaluation = await spendingService.evaluate(walletId, totalUsdc);
-  if (!evaluation.allowed) {
-    const denial = evaluation.denial;
-    throw new ScuttlePayError({
-      code: ErrorCode.SPENDING_LIMIT_EXCEEDED,
-      message: `Spending limit exceeded: ${denial?.code ?? "unknown"}`,
-      metadata: {
-        period: denial?.code === "DAILY_LIMIT_EXCEEDED" ? "daily" : "per-transaction",
-        limit: denial?.limit,
-        spent: denial?.current,
-        requested: denial?.requested,
-      },
-    });
-  }
+      const evaluation = await spendingService.evaluate(apiKeyId, totalUsdc, tx);
+      if (!evaluation.allowed) {
+        const { denial } = evaluation;
+        throw new ScuttlePayError({
+          code: ErrorCode.SPENDING_LIMIT_EXCEEDED,
+          message: `Spending limit exceeded: ${denial.code}`,
+          metadata: {
+            period: denial.code === "DAILY_LIMIT_EXCEEDED" ? "daily" : "per-transaction",
+            limit: denial.limit,
+            spent: denial.current,
+            requested: denial.requested,
+          },
+        });
+      }
 
-  // Step 4: Insert pending transaction
-  const [txRow] = await db
-    .insert(transactions)
-    .values({
-      walletId,
-      type: TransactionType.PURCHASE,
-      status: TransactionStatus.PENDING,
-      amountUsdc: totalUsdc,
-      merchantAddress,
-      productId,
-      productName: product.title,
-      storeUrl,
-    })
-    .returning();
+      const [row] = await tx
+        .insert(transactions)
+        .values({
+          walletId,
+          apiKeyId,
+          type: TransactionType.PURCHASE,
+          status: TransactionStatus.PENDING,
+          amountUsdc: totalUsdc,
+          merchantAddress,
+          productId,
+          productName: product.title,
+          storeUrl,
+        })
+        .returning();
 
-  if (!txRow) {
-    throw new ScuttlePayError({
-      code: ErrorCode.DATABASE_ERROR,
-      message: "Failed to create transaction row",
-    });
-  }
+      if (!row) {
+        throw new ScuttlePayError({
+          code: ErrorCode.DATABASE_ERROR,
+          message: "Failed to create transaction row",
+        });
+      }
 
-  // Step 5: Sign and settle payment
+      return row;
+    },
+    { isolationLevel: "serializable" },
+  );
+
+  // Payment settlement (outside the serializable tx — it's an external call)
   let settlement: paymentService.SettlementResult;
   try {
     settlement = await paymentService.signAndSettle(
@@ -154,7 +164,7 @@ export async function purchase(
     });
   }
 
-  // Step 6: Update transaction to settled
+  // Update transaction to settled
   await db
     .update(transactions)
     .set({
@@ -164,7 +174,7 @@ export async function purchase(
     })
     .where(eq(transactions.id, txRow.id));
 
-  // Step 7: Create Shopify order (non-fatal)
+  // Create Shopify order (non-fatal)
   let shopifyOrderId: string | null = null;
   let orderNumber: string | null = null;
   let orderStatus: OrderStatus = OrderStatus.CREATED;
@@ -193,7 +203,6 @@ export async function purchase(
     });
   }
 
-  // Step 8: Insert order row
   await db.insert(orders).values({
     transactionId: txRow.id,
     walletId,
@@ -210,7 +219,6 @@ export async function purchase(
     errorMessage: orderError,
   });
 
-  // Step 9: Return result
   return {
     transactionId: txRow.id,
     txHash: settlement.txHash,

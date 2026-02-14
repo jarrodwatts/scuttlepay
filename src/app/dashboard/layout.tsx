@@ -1,49 +1,42 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Wallet, ArrowLeftRight, Settings } from "lucide-react";
 
-import { auth } from "~/server/auth";
-
-const navItems = [
-  { href: "/dashboard", label: "Wallet", icon: Wallet },
-  { href: "/dashboard/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/dashboard/setup", label: "Setup", icon: Settings },
-] as const;
+import { getAuthUser } from "~/server/auth";
+import { ThirdwebWrapper } from "~/components/thirdweb-wrapper";
+import { GridCross } from "~/components/ui/grid-cross";
+import { SidebarNav } from "./_components/sidebar-nav";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const user = await getAuthUser();
 
-  if (!session) {
-    redirect("/api/auth/signin");
+  if (!user) {
+    redirect("/login");
   }
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground md:block">
+      <aside className="relative hidden w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground md:block">
+        <GridCross position="top-right" />
         <div className="flex h-14 items-center border-b px-6">
-          <Link href="/" className="text-lg font-semibold">
+          <Link
+            href="/"
+            className="font-mono text-sm font-semibold uppercase tracking-widest"
+          >
             ScuttlePay
           </Link>
         </div>
-        <nav className="flex flex-col gap-1 p-4">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <Icon className="size-4" />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNav />
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <div className="container mx-auto p-6 lg:p-8">{children}</div>
+        <ThirdwebWrapper>
+          <div className="mx-auto max-w-5xl border-x border-border p-6 lg:p-8">
+            {children}
+          </div>
+        </ThirdwebWrapper>
       </main>
     </div>
   );

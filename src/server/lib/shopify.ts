@@ -1,5 +1,8 @@
 import { env } from "~/env";
 
+const STOREFRONT_API_VERSION = "2024-10";
+const ADMIN_API_VERSION = "2024-01";
+
 // ---------------------------------------------------------------------------
 // Storefront API (GraphQL)
 // ---------------------------------------------------------------------------
@@ -14,7 +17,7 @@ function getStorefrontUrl(): string {
   if (!storeUrl) {
     throw new Error("SHOPIFY_STORE_URL is not configured");
   }
-  return `${storeUrl}/api/2024-10/graphql.json`;
+  return `${storeUrl}/api/${STOREFRONT_API_VERSION}/graphql.json`;
 }
 
 function getStorefrontToken(): string {
@@ -36,6 +39,7 @@ export async function storefrontQuery<T>(
       "X-Shopify-Storefront-Access-Token": getStorefrontToken(),
     },
     body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
@@ -67,7 +71,7 @@ function getAdminBaseUrl(): string {
   if (!storeUrl) {
     throw new Error("SHOPIFY_STORE_URL is not configured");
   }
-  return `${storeUrl}/admin/api/2024-01`;
+  return `${storeUrl}/admin/api/${ADMIN_API_VERSION}`;
 }
 
 function getAdminToken(): string {

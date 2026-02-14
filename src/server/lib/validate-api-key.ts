@@ -8,6 +8,7 @@ import { hashApiKey } from "~/server/lib/api-key";
 export interface ApiKeyContext {
   userId: string;
   walletId: string;
+  apiKeyId: string;
 }
 
 export async function validateApiKey(
@@ -57,13 +58,13 @@ export async function validateApiKey(
     throw new ApiKeyError("No active wallet found for this API key");
   }
 
-  void db
-    .update(apiKeys)
+  void db.update(apiKeys)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiKeys.id, row.id))
-    .execute();
+    .execute()
+    .catch((err: unknown) => console.error("[validate-api-key] Failed to update lastUsedAt", err));
 
-  return { userId: row.userId, walletId: wallet.id };
+  return { userId: row.userId, walletId: wallet.id, apiKeyId: row.id };
 }
 
 export class ApiKeyError extends Error {

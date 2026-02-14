@@ -2,6 +2,7 @@ import { index } from "drizzle-orm/pg-core";
 import type { TransactionType, TransactionStatus, OrderStatus } from "@scuttlepay/shared";
 import { createTable } from "./table-creator";
 import { wallets } from "./wallet";
+import { apiKeys } from "./api-key";
 
 export const transactions = createTable(
   "transaction",
@@ -15,6 +16,9 @@ export const transactions = createTable(
       .varchar({ length: 255 })
       .notNull()
       .references(() => wallets.id, { onDelete: "restrict" }),
+    apiKeyId: d
+      .varchar({ length: 255 })
+      .references(() => apiKeys.id, { onDelete: "set null" }),
     type: d
       .varchar({ length: 20 })
       .notNull()
@@ -25,10 +29,10 @@ export const transactions = createTable(
       .$type<TransactionStatus>(),
     amountUsdc: d.numeric({ precision: 20, scale: 6 }).notNull(),
     txHash: d.text(),
-    merchantAddress: d.text().notNull(),
-    productId: d.text().notNull(),
-    productName: d.text().notNull(),
-    storeUrl: d.text().notNull(),
+    merchantAddress: d.text(),
+    productId: d.text(),
+    productName: d.text(),
+    storeUrl: d.text(),
     errorMessage: d.text(),
     metadata: d.jsonb().$type<Record<string, unknown>>(),
     initiatedAt: d
@@ -44,6 +48,7 @@ export const transactions = createTable(
   (t) => [
     index("transaction_wallet_status_idx").on(t.walletId, t.status),
     index("transaction_wallet_created_idx").on(t.walletId, t.createdAt),
+    index("transaction_api_key_status_created_idx").on(t.apiKeyId, t.status, t.createdAt),
   ],
 );
 

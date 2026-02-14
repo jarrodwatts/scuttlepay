@@ -1,23 +1,34 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiKey } from "~/app/api/mcp/_middleware";
-import { ErrorCode, ScuttlePayError, toApiResponse } from "@scuttlepay/shared";
+import {
+  purchaseRequestSchema,
+  ScuttlePayError,
+  ErrorCode,
+  toApiResponse,
+} from "@scuttlepay/shared";
+import { purchase } from "~/server/services/purchase.service";
 
-export const POST = withApiKey(async (req: NextRequest, _ctx) => {
-  const body = (await req.json()) as Record<string, unknown>;
-  const productId = body.productId;
+export const POST = withApiKey(async (req: NextRequest, ctx) => {
+  const body: unknown = await req.json();
+  const parsed = purchaseRequestSchema.safeParse(body);
 
-  if (typeof productId !== "string" || productId.length === 0) {
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((i) => i.message).join(", ");
     const err = new ScuttlePayError({
       code: ErrorCode.VALIDATION_ERROR,
-      message: "Missing required field 'productId'",
+      message: msg,
     });
     return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
   }
 
-  const err = new ScuttlePayError({
-    code: ErrorCode.INTERNAL_ERROR,
-    message: "Purchase endpoint not yet connected to payment service",
+  const result = await purchase({
+    walletId: ctx.walletId,
+    apiKeyId: ctx.apiKeyId,
+    productId: parsed.data.productId,
+    variantId: parsed.data.variantId,
+    quantity: parsed.data.quantity,
   });
-  return NextResponse.json(toApiResponse(err), { status: 501 });
+
+  return NextResponse.json({ data: result });
 });

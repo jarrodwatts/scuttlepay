@@ -1,18 +1,17 @@
-import { type Hex, getContract } from "thirdweb";
-import { allowance } from "thirdweb/extensions/erc20";
+import { type Hex } from "thirdweb";
 import {
   USDC_ADDRESSES,
-  USDC_DECIMALS,
   CHAIN_NAMES,
 } from "@scuttlepay/shared";
 
 import { env } from "~/env";
 import {
   activeChain,
+  chainId,
   getServerWallet,
-  getThirdwebClient,
 } from "~/server/lib/thirdweb";
 import { getAddress } from "~/server/services/wallet.service";
+import { parseUsdc, isPositiveUsdc } from "~/server/lib/usdc-math";
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -55,7 +54,7 @@ const TRANSFER_WITH_AUTHORIZATION_TYPES = {
 } as const;
 
 function getUsdcAddress(): Hex {
-  const addr = USDC_ADDRESSES[activeChain.id as keyof typeof USDC_ADDRESSES];
+  const addr = USDC_ADDRESSES[chainId];
   if (!addr) {
     throw new PaymentServiceError(
       "PAYMENT_FAILED",
@@ -66,7 +65,7 @@ function getUsdcAddress(): Hex {
 }
 
 function getChainName(): string {
-  const name = CHAIN_NAMES[activeChain.id as keyof typeof CHAIN_NAMES];
+  const name = CHAIN_NAMES[chainId];
   if (!name) {
     throw new PaymentServiceError(
       "PAYMENT_FAILED",
@@ -82,13 +81,6 @@ function randomNonce(): Hex {
   return `0x${Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")}`;
-}
-
-function parseUsdc(amount: string): bigint {
-  const parts = amount.split(".");
-  const whole = parts[0] ?? "0";
-  const frac = (parts[1] ?? "").padEnd(USDC_DECIMALS, "0").slice(0, USDC_DECIMALS);
-  return BigInt(whole) * BigInt(10 ** USDC_DECIMALS) + BigInt(frac);
 }
 
 // ---------------------------------------------------------------------------
@@ -169,8 +161,7 @@ export async function signAndSettle(
     );
   }
 
-  const amount = Number(amountUsdc);
-  if (Number.isNaN(amount) || amount <= 0) {
+  if (!isPositiveUsdc(amountUsdc)) {
     throw new PaymentServiceError(
       "INVALID_AMOUNT",
       `Invalid amount: ${amountUsdc}`,
@@ -197,7 +188,7 @@ export async function signAndSettle(
     types: TRANSFER_WITH_AUTHORIZATION_TYPES,
     primaryType: "TransferWithAuthorization",
     message: {
-      from: fromAddress as Hex,
+      from: fromAddress,
       to: payToAddress as Hex,
       value: valueRaw,
       validAfter,
@@ -264,32 +255,3 @@ export async function signAndSettle(
   };
 }
 
-export async function verifyPayment(txHash: string): Promise<boolean> {
-  const usdcAddress = getUsdcAddress();
-  const client = getThirdwebClient();
-  const contract = getContract({
-    client,
-    chain: activeChain,
-    address: usdcAddress,
-  });
-
-  // Verify the transaction exists by checking the USDC contract is responsive
-  // and the tx hash format is valid. Full on-chain receipt verification
-  // would require an RPC eth_getTransactionReceipt call.
-  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-    return false;
-  }
-
-  // Perform a lightweight on-chain check: read allowance to confirm
-  // the USDC contract is reachable on this chain.
-  try {
-    await allowance({
-      contract,
-      owner: "0x0000000000000000000000000000000000000001",
-      spender: "0x0000000000000000000000000000000000000002",
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}

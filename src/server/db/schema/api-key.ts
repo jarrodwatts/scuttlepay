@@ -28,5 +28,6 @@ export const apiKeys = createTable(
   (t) => [
     index("api_key_user_id_idx").on(t.userId),
     index("api_key_prefix_active_idx").on(t.keyPrefix, t.isActive),
+    index("api_key_hash_active_idx").on(t.keyHash, t.isActive),
   ],
 );

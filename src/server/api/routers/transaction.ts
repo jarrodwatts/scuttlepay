@@ -1,40 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
-import { transactionListParamsSchema, transactionSchema } from "@scuttlepay/shared";
+import { transactionListParamsSchema, transactionSchema, OrderStatus } from "@scuttlepay/shared";
 
 import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { transactions } from "~/server/db/schema/transaction";
-
-function requireWalletId(walletId: string | null): string {
-  if (!walletId) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "No active wallet found",
-    });
-  }
-  return walletId;
-}
-
-function serializeTransaction(row: typeof transactions.$inferSelect) {
-  return {
-    id: row.id,
-    walletId: row.walletId,
-    type: row.type,
-    status: row.status,
-    amountUsdc: row.amountUsdc,
-    txHash: row.txHash,
-    merchantAddress: row.merchantAddress,
-    productId: row.productId,
-    productName: row.productName,
-    storeUrl: row.storeUrl,
-    errorMessage: row.errorMessage,
-    initiatedAt: row.initiatedAt.toISOString(),
-    settledAt: row.settledAt?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
+import { apiKeys } from "~/server/db/schema/api-key";
+import { requireWalletId } from "~/server/lib/require-wallet";
+import { serializeTransaction } from "~/server/lib/serialize-transaction";
 
 const transactionListOutputSchema = z.object({
   items: z.array(transactionSchema),
@@ -48,7 +22,7 @@ const transactionDetailOutputSchema = transactionSchema.extend({
       id: z.string(),
       shopifyOrderId: z.string().nullable(),
       shopifyOrderNumber: z.string().nullable(),
-      status: z.string(),
+      status: z.nativeEnum(OrderStatus),
       productId: z.string(),
       productName: z.string(),
       variantId: z.string().nullable(),
@@ -71,12 +45,20 @@ export const transactionRouter = createTRPCRouter({
 
       const conditions = [eq(transactions.walletId, walletId)];
       if (cursor) {
-        conditions.push(lt(transactions.createdAt, new Date(cursor)));
+        const cursorDate = new Date(cursor);
+        if (Number.isNaN(cursorDate.getTime())) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid cursor" });
+        }
+        conditions.push(lt(transactions.createdAt, cursorDate));
       }
 
       const rows = await db
-        .select()
+        .select({
+          transaction: transactions,
+          agentName: apiKeys.name,
+        })
         .from(transactions)
+        .leftJoin(apiKeys, eq(transactions.apiKeyId, apiKeys.id))
         .where(and(...conditions))
         .orderBy(desc(transactions.createdAt))
         .limit(limit + 1);
@@ -86,8 +68,10 @@ export const transactionRouter = createTRPCRouter({
       const lastItem = items[items.length - 1];
 
       return {
-        items: items.map(serializeTransaction),
-        nextCursor: hasMore && lastItem ? lastItem.createdAt.toISOString() : null,
+        items: items.map((r) => serializeTransaction(r.transaction, r.agentName)),
+        nextCursor: hasMore && lastItem
+          ? lastItem.transaction.createdAt.toISOString()
+          : null,
       };
     }),
 
@@ -102,7 +86,7 @@ export const transactionRouter = createTRPCRouter({
           eq(transactions.id, input.id),
           eq(transactions.walletId, walletId),
         ),
-        with: { orders: true },
+        with: { orders: true, apiKey: true },
       });
 
       if (!row) {
@@ -115,7 +99,7 @@ export const transactionRouter = createTRPCRouter({
       const linkedOrder = row.orders[0] ?? null;
 
       return {
-        ...serializeTransaction(row),
+        ...serializeTransaction(row, row.apiKey?.name ?? null),
         metadata: row.metadata ?? null,
         order: linkedOrder
           ? {

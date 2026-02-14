@@ -3,7 +3,9 @@ import { and, desc, eq, lt } from "drizzle-orm";
 
 import { db } from "~/server/db";
 import { transactions } from "~/server/db/schema/transaction";
+import { apiKeys } from "~/server/db/schema/api-key";
 import { withApiKey } from "~/app/api/mcp/_middleware";
+import { serializeTransaction } from "~/server/lib/serialize-transaction";
 
 export const GET = withApiKey(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
@@ -16,15 +18,24 @@ export const GET = withApiKey(async (req: NextRequest, ctx) => {
   }
 
   const rows = await db
-    .select()
+    .select({
+      transaction: transactions,
+      agentName: apiKeys.name,
+    })
     .from(transactions)
+    .leftJoin(apiKeys, eq(transactions.apiKeyId, apiKeys.id))
     .where(and(...conditions))
     .orderBy(desc(transactions.createdAt))
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
-  const data = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? data[data.length - 1]?.createdAt.toISOString() : null;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const lastItem = items[items.length - 1];
 
-  return NextResponse.json({ data, nextCursor });
+  return NextResponse.json({
+    data: items.map((r) => serializeTransaction(r.transaction, r.agentName)),
+    nextCursor: hasMore && lastItem
+      ? lastItem.transaction.createdAt.toISOString()
+      : null,
+  });
 });

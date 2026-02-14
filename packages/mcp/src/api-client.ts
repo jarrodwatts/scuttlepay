@@ -32,12 +32,12 @@ interface TransactionRow {
   status: string;
   amountUsdc: string;
   txHash: string | null;
-  merchantAddress: string;
-  productId: string;
-  productName: string;
-  storeUrl: string;
+  merchantAddress: string | null;
+  productId: string | null;
+  productName: string | null;
+  storeUrl: string | null;
   errorMessage: string | null;
-  metadata: Record<string, unknown> | null;
+  agentName: string | null;
   initiatedAt: string;
   settledAt: string | null;
   createdAt: string;
@@ -72,8 +72,9 @@ export class ApiClient {
   }
 
   async getProduct(id: string): Promise<ProductDetail> {
+    const params = new URLSearchParams({ id });
     const { data } = await this.get<{ data: ProductDetail }>(
-      `/api/mcp/products/${encodeURIComponent(id)}`,
+      `/api/mcp/products?${params.toString()}`,
     );
     return data;
   }

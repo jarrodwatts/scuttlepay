@@ -2,22 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { CHAIN_NAMES, walletBalanceSchema } from "@scuttlepay/shared";
 
 import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
-import { activeChain } from "~/server/lib/thirdweb";
+import { chainId } from "~/server/lib/thirdweb";
 import {
   getBalance,
   getAddress,
   WalletServiceError,
 } from "~/server/services/wallet.service";
-
-function requireWalletId(walletId: string | null): string {
-  if (!walletId) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "No active wallet found",
-    });
-  }
-  return walletId;
-}
+import { requireWalletId } from "~/server/lib/require-wallet";
 
 function mapServiceError(err: unknown): never {
   if (err instanceof WalletServiceError) {
@@ -29,7 +20,7 @@ function mapServiceError(err: unknown): never {
   throw err;
 }
 
-const chainName = CHAIN_NAMES[activeChain.id as keyof typeof CHAIN_NAMES];
+const chainName = CHAIN_NAMES[chainId];
 
 export const walletRouter = createTRPCRouter({
   getBalance: authedProcedure.output(walletBalanceSchema).query(async ({ ctx }) => {

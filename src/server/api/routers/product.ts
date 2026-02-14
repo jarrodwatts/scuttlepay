@@ -1,10 +1,7 @@
-import { TRPCError } from "@trpc/server";
 import {
   productSearchParamsSchema,
   productSearchResultSchema,
   productDetailSchema,
-  ScuttlePayError,
-  ErrorCode,
 } from "@scuttlepay/shared";
 import { z } from "zod";
 
@@ -13,16 +10,7 @@ import {
   searchProducts,
   getProduct,
 } from "~/server/services/shopify.service";
-
-function mapServiceError(err: unknown): never {
-  if (err instanceof ScuttlePayError) {
-    throw new TRPCError({
-      code: err.code === ErrorCode.PRODUCT_NOT_FOUND ? "NOT_FOUND" : "INTERNAL_SERVER_ERROR",
-      message: err.message,
-    });
-  }
-  throw err;
-}
+import { mapServiceError } from "~/server/lib/map-service-error";
 
 export const productRouter = createTRPCRouter({
   search: authedProcedure

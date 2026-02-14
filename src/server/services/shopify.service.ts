@@ -12,6 +12,7 @@ import {
 } from "~/server/lib/shopify";
 
 const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 200;
 
 interface CacheEntry<T> {
   data: T;
@@ -23,7 +24,10 @@ const cache = new Map<string, CacheEntry<unknown>>();
 function getCached<T>(key: string): T | undefined {
   const entry = cache.get(key) as CacheEntry<T> | undefined;
   if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(key);
+    return undefined;
+  }
   return entry.data;
 }
 
@@ -33,6 +37,10 @@ function getStale<T>(key: string): T | undefined {
 }
 
 function setCache<T>(key: string, data: T): void {
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 

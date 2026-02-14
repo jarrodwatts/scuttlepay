@@ -1,25 +1,21 @@
 import { relations } from "drizzle-orm";
-import { users, accounts, sessions } from "./auth";
+import { users } from "./auth";
 import { apiKeys } from "./api-key";
 import { wallets, spendingPolicies } from "./wallet";
 import { transactions, orders } from "./transaction";
 
 export const usersRelations = relations(users, ({ many }) => ({
-  accounts: many(accounts),
   apiKeys: many(apiKeys),
   wallets: many(wallets),
 }));
 
-export const accountsRelations = relations(accounts, ({ one }) => ({
-  user: one(users, { fields: [accounts.userId], references: [users.id] }),
-}));
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  user: one(users, { fields: [sessions.userId], references: [users.id] }),
-}));
-
-export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
+  spendingPolicy: one(spendingPolicies, {
+    fields: [apiKeys.id],
+    references: [spendingPolicies.apiKeyId],
+  }),
+  transactions: many(transactions),
 }));
 
 export const walletsRelations = relations(wallets, ({ one, many }) => ({
@@ -36,6 +32,10 @@ export const spendingPoliciesRelations = relations(
       fields: [spendingPolicies.walletId],
       references: [wallets.id],
     }),
+    apiKey: one(apiKeys, {
+      fields: [spendingPolicies.apiKeyId],
+      references: [apiKeys.id],
+    }),
   }),
 );
 
@@ -45,6 +45,10 @@ export const transactionsRelations = relations(
     wallet: one(wallets, {
       fields: [transactions.walletId],
       references: [wallets.id],
+    }),
+    apiKey: one(apiKeys, {
+      fields: [transactions.apiKeyId],
+      references: [apiKeys.id],
     }),
     orders: many(orders),
   }),

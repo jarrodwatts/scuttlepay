@@ -1,9 +1,13 @@
-import { and, eq, gte, sum } from "drizzle-orm";
+import { and, eq, gte, sum, type ExtractTablesWithRelations } from "drizzle-orm";
+import type { PgTransaction } from "drizzle-orm/pg-core";
+import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import { TransactionStatus } from "@scuttlepay/shared";
 
 import { db } from "~/server/db";
+import type * as schema from "~/server/db/schema/index";
 import { spendingPolicies } from "~/server/db/schema/wallet";
 import { transactions } from "~/server/db/schema/transaction";
+import { addUsdc, compareUsdc, isPositiveUsdc } from "~/server/lib/usdc-math";
 
 export type SpendingDenialCode = "PER_TX_EXCEEDED" | "DAILY_LIMIT_EXCEEDED";
 
@@ -14,10 +18,9 @@ export interface SpendingDenial {
   requested: string;
 }
 
-export interface SpendingEvaluation {
-  allowed: boolean;
-  denial?: SpendingDenial;
-}
+export type SpendingEvaluation =
+  | { allowed: true }
+  | { allowed: false; denial: SpendingDenial };
 
 export type SpendingServiceErrorCode =
   | "POLICY_NOT_FOUND"
@@ -40,13 +43,17 @@ function todayUtcStart(): Date {
   );
 }
 
-export async function getPolicy(walletId: string) {
-  const policy = await db
+type DbOrTx =
+  | typeof db
+  | PgTransaction<PostgresJsQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;
+
+export async function getPolicy(apiKeyId: string, executor: DbOrTx = db) {
+  const policy = await executor
     .select()
     .from(spendingPolicies)
     .where(
       and(
-        eq(spendingPolicies.walletId, walletId),
+        eq(spendingPolicies.apiKeyId, apiKeyId),
         eq(spendingPolicies.isActive, true),
       ),
     )
@@ -56,22 +63,25 @@ export async function getPolicy(walletId: string) {
   if (!policy) {
     throw new SpendingServiceError(
       "POLICY_NOT_FOUND",
-      `No active spending policy found for wallet ${walletId}`,
+      `No active spending policy found for agent ${apiKeyId}`,
     );
   }
 
   return policy;
 }
 
-export async function getDailySpent(walletId: string): Promise<string> {
+export async function getDailySpent(
+  apiKeyId: string,
+  executor: DbOrTx = db,
+): Promise<string> {
   const startOfDay = todayUtcStart();
 
-  const result = await db
+  const result = await executor
     .select({ total: sum(transactions.amountUsdc) })
     .from(transactions)
     .where(
       and(
-        eq(transactions.walletId, walletId),
+        eq(transactions.apiKeyId, apiKeyId),
         eq(transactions.status, TransactionStatus.SETTLED),
         gte(transactions.createdAt, startOfDay),
       ),
@@ -82,21 +92,20 @@ export async function getDailySpent(walletId: string): Promise<string> {
 }
 
 export async function evaluate(
-  walletId: string,
+  apiKeyId: string,
   amountUsdc: string,
+  executor: DbOrTx = db,
 ): Promise<SpendingEvaluation> {
-  const amount = Number(amountUsdc);
-  if (Number.isNaN(amount) || amount <= 0) {
+  if (!isPositiveUsdc(amountUsdc)) {
     throw new SpendingServiceError(
       "INVALID_AMOUNT",
       `Invalid amount: ${amountUsdc}`,
     );
   }
 
-  const policy = await getPolicy(walletId);
+  const policy = await getPolicy(apiKeyId, executor);
 
-  const maxPerTx = Number(policy.maxPerTx);
-  if (amount > maxPerTx) {
+  if (compareUsdc(amountUsdc, policy.maxPerTx) > 0) {
     return {
       allowed: false,
       denial: {
@@ -108,11 +117,10 @@ export async function evaluate(
     };
   }
 
-  const dailySpent = await getDailySpent(walletId);
-  const dailyTotal = Number(dailySpent) + amount;
-  const dailyLimit = Number(policy.dailyLimit);
+  const dailySpent = await getDailySpent(apiKeyId, executor);
 
-  if (dailyTotal > dailyLimit) {
+  if (compareUsdc(dailySpent, policy.dailyLimit) >= 0 ||
+      compareUsdc(addUsdc(dailySpent, amountUsdc), policy.dailyLimit) > 0) {
     return {
       allowed: false,
       denial: {

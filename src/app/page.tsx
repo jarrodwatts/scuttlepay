@@ -1,30 +1,36 @@
 import Link from "next/link";
-import { ArrowRight, Bot, CreditCard, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, CreditCard, ShieldCheck, Zap } from "lucide-react";
 
-import { auth } from "~/server/auth";
+import { getAuthUser } from "~/server/auth";
 import { Button } from "~/components/ui/button";
+import { GridCross } from "~/components/ui/grid-cross";
+import { AsciiBand } from "~/components/ui/ascii-band";
 
 export default async function Home() {
-  const session = await auth();
-  const ctaHref = session ? "/dashboard" : "/api/auth/signin";
+  const user = await getAuthUser();
+  const ctaHref = user ? "/dashboard" : "/login";
 
   return (
-    <main className="flex min-h-screen flex-col">
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col border-x border-border">
       {/* Nav */}
       <header className="flex items-center justify-between border-b px-6 py-4 lg:px-12">
-        <span className="text-lg font-semibold tracking-tight">ScuttlePay</span>
+        <span className="font-mono text-sm font-semibold uppercase tracking-widest">
+          ScuttlePay
+        </span>
         <Button asChild variant="ghost" size="sm">
-          <Link href={ctaHref}>{session ? "Dashboard" : "Sign in"}</Link>
+          <Link href={ctaHref}>{user ? "Dashboard" : "Sign in"}</Link>
         </Button>
       </header>
 
       {/* Hero */}
-      <section className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-24 text-center lg:py-32">
-        <div className="inline-flex items-center gap-2 rounded-full border bg-muted px-4 py-1.5 text-sm text-muted-foreground">
-          <Bot className="size-4" />
+      <section className="relative flex flex-1 flex-col items-start justify-center gap-6 border-b px-6 py-24 lg:px-12 lg:py-32">
+        <GridCross position="top-left" />
+        <GridCross position="bottom-right" />
+        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+          <span className="inline-block size-1.5 rounded-full bg-accent" />
           Built for autonomous AI agents
         </div>
-        <h1 className="max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+        <h1 className="max-w-3xl text-5xl font-black uppercase tracking-tight sm:text-7xl lg:text-8xl">
           A bank account for AI&nbsp;agents
         </h1>
         <p className="max-w-lg text-lg text-muted-foreground">
@@ -32,7 +38,7 @@ export default async function Home() {
           services autonomously — on-chain, with full visibility.
         </p>
         <div className="flex gap-3">
-          <Button asChild size="lg">
+          <Button asChild variant="accent" size="lg">
             <Link href={ctaHref}>
               Get started
               <ArrowRight className="size-4" />
@@ -44,74 +50,85 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Problem → Solution */}
-      <section className="border-t bg-muted/40 px-6 py-20 lg:px-12">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-4 text-center text-2xl font-bold tracking-tight sm:text-3xl">
-            Why ScuttlePay?
-          </h2>
-          <p className="mb-12 text-center text-muted-foreground">
-            AI agents need to spend money, but they can&rsquo;t have credit cards.
-          </p>
-          <div className="grid gap-8 sm:grid-cols-3">
-            <FeatureCard
-              icon={<CreditCard className="size-5" />}
-              title="Agent-native wallet"
-              description="Each agent gets a USDC wallet on Base — no bank account or KYC required."
-            />
-            <FeatureCard
-              icon={<ShieldCheck className="size-5" />}
-              title="Spending policies"
-              description="Set per-transaction and daily limits. Your agent can only spend what you allow."
-            />
-            <FeatureCard
-              icon={<Zap className="size-5" />}
-              title="MCP-ready"
-              description="Integrate with any AI framework via the Model Context Protocol in minutes."
-            />
-          </div>
+      <AsciiBand pattern="crosshatch" />
+
+      {/* Features */}
+      <section className="relative border-b px-6 py-20 lg:px-12">
+        <GridCross position="top-left" />
+        <GridCross position="bottom-right" />
+        <div className="mb-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+          [01] Why ScuttlePay
+        </div>
+        <h2 className="mb-4 text-2xl font-black uppercase tracking-tight sm:text-3xl">
+          Why ScuttlePay?
+        </h2>
+        <p className="mb-12 text-muted-foreground">
+          AI agents need to spend money, but they can&rsquo;t have credit cards.
+        </p>
+        <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <FeatureCard
+            icon={<CreditCard className="size-5" />}
+            title="Fund with a credit card"
+            description="Add funds instantly. Your agent spends dollars — no crypto knowledge needed."
+          />
+          <FeatureCard
+            icon={<ShieldCheck className="size-5" />}
+            title="Spending policies"
+            description="Set per-transaction and daily limits. Your agent can only spend what you allow."
+          />
+          <FeatureCard
+            icon={<Zap className="size-5" />}
+            title="MCP-ready"
+            description="Integrate with any AI framework via the Model Context Protocol in minutes."
+          />
         </div>
       </section>
+
+      <AsciiBand pattern="dots" />
 
       {/* How it works */}
-      <section id="how-it-works" className="px-6 py-20 lg:px-12">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="mb-12 text-center text-2xl font-bold tracking-tight sm:text-3xl">
-            How it works
-          </h2>
-          <div className="flex flex-col gap-0">
-            <Step
-              number="1"
-              title="Create a wallet"
-              description="Sign up and your agent gets a USDC wallet on Base Sepolia."
-            />
-            <StepConnector />
-            <Step
-              number="2"
-              title="Configure your agent"
-              description="Connect ScuttlePay to your AI agent using the MCP server."
-            />
-            <StepConnector />
-            <Step
-              number="3"
-              title="Agent pays autonomously"
-              description="Your agent checks its balance, makes purchases, and you see every transaction."
-            />
-          </div>
-          <div className="mt-12 flex justify-center">
-            <Button asChild size="lg">
-              <Link href={ctaHref}>
-                Get started
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          </div>
+      <section id="how-it-works" className="relative border-b px-6 py-20 lg:px-12">
+        <GridCross position="top-left" />
+        <div className="mb-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+          [02] How it works
+        </div>
+        <h2 className="mb-12 text-2xl font-black uppercase tracking-tight sm:text-3xl">
+          How it works
+        </h2>
+        <div className="flex flex-col gap-0">
+          <Step
+            number="01"
+            title="Sign up and add funds"
+            description="Create an account and deposit dollars with a credit card."
+          />
+          <StepConnector />
+          <Step
+            number="02"
+            title="Create an agent"
+            description="Set spending limits and get an API key for your AI agent."
+          />
+          <StepConnector />
+          <Step
+            number="03"
+            title="Agent spends autonomously"
+            description="Your agent makes purchases within its limits. You see every transaction in real time."
+          />
+        </div>
+        <div className="mt-12">
+          <Button asChild variant="accent" size="lg">
+            <Link href={ctaHref}>
+              Get started
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
         </div>
       </section>
 
+      <AsciiBand pattern="dither" />
+
       {/* Footer */}
-      <footer className="border-t px-6 py-6 text-center text-sm text-muted-foreground lg:px-12">
-        ScuttlePay &mdash; ETH Global Hackathon 2025
+      <footer className="border-t px-6 py-6 font-mono text-xs uppercase tracking-widest text-muted-foreground lg:px-12">
+        ScuttlePay / 2026
       </footer>
     </main>
   );
@@ -127,8 +144,8 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-card p-6">
-      <div className="flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <div className="flex flex-col gap-3 p-6">
+      <div className="flex size-10 items-center justify-center border border-border">
         {icon}
       </div>
       <h3 className="font-semibold">{title}</h3>
@@ -148,7 +165,7 @@ function Step({
 }) {
   return (
     <div className="flex items-start gap-4">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+      <div className="flex size-8 shrink-0 items-center justify-center border border-border font-mono text-sm">
         {number}
       </div>
       <div>

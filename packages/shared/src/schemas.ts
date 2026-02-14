@@ -5,10 +5,6 @@ export const usdcAmountSchema = z
   .string()
   .regex(/^\d+(\.\d{1,6})?$/, "Invalid USDC amount: up to 6 decimal places");
 
-export const ethereumAddressSchema = z
-  .string()
-  .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
-
 export const purchaseRequestSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().optional(),
@@ -64,11 +60,12 @@ export const transactionSchema = z.object({
   status: z.nativeEnum(TransactionStatus),
   amountUsdc: usdcAmountSchema,
   txHash: z.string().nullable(),
-  merchantAddress: z.string(),
-  productId: z.string(),
-  productName: z.string(),
-  storeUrl: z.string(),
+  merchantAddress: z.string().nullable(),
+  productId: z.string().nullable(),
+  productName: z.string().nullable(),
+  storeUrl: z.string().nullable(),
   errorMessage: z.string().nullable(),
+  agentName: z.string().nullable(),
   initiatedAt: z.string(),
   settledAt: z.string().nullable(),
   createdAt: z.string(),

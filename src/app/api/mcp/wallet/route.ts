@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "~/server/db";
 import { wallets } from "~/server/db/schema/wallet";
 import { withApiKey } from "~/app/api/mcp/_middleware";
+import { ErrorCode, ScuttlePayError, toApiResponse } from "@scuttlepay/shared";
 import { getBalance } from "~/server/services/wallet.service";
 
 export const GET = withApiKey(async (_req, ctx) => {
@@ -24,13 +25,20 @@ export const GET = withApiKey(async (_req, ctx) => {
     .then((rows) => rows[0]);
 
   if (!wallet) {
-    return NextResponse.json(
-      { error: { code: "WALLET_NOT_FOUND", message: "Wallet not found" } },
-      { status: 404 },
-    );
+    const err = new ScuttlePayError({
+      code: ErrorCode.WALLET_NOT_FOUND,
+      message: "Wallet not found",
+    });
+    return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
   }
 
   const balance = await getBalance(ctx.walletId);
 
-  return NextResponse.json({ data: { ...wallet, balance } });
+  return NextResponse.json({
+    data: {
+      ...wallet,
+      createdAt: wallet.createdAt.toISOString(),
+      balance,
+    },
+  });
 });

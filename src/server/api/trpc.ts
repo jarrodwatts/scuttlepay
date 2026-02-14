@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
-import { auth } from "~/server/auth";
+import { getAuthUser, type AuthUser } from "~/server/auth";
 import { db } from "~/server/db";
 import { wallets } from "~/server/db/schema/wallet";
 import {
@@ -12,11 +12,11 @@ import {
 } from "~/server/lib/validate-api-key";
 
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const session = await auth();
+  const user = await getAuthUser();
 
   return {
     db,
-    session,
+    user,
     ...opts,
   };
 };
@@ -39,18 +39,22 @@ export const createCallerFactory = t.createCallerFactory;
 
 export const createTRPCRouter = t.router;
 
+const simulateLatency = process.env.TRPC_SIMULATE_LATENCY === "true";
+
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
 
-  if (t._config.isDev) {
+  if (simulateLatency) {
     const waitMs = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
   const result = await next();
 
-  const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  if (t._config.isDev) {
+    const end = Date.now();
+    console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  }
 
   return result;
 });
@@ -60,26 +64,30 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
 export const protectedProcedure = t.procedure
   .use(timingMiddleware)
   .use(({ ctx, next }) => {
-    if (!ctx.session?.user) {
+    if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED" });
     }
     return next({
-      ctx: {
-        session: { ...ctx.session, user: ctx.session.user },
-      },
+      ctx: { user: ctx.user satisfies AuthUser },
     });
   });
+
+interface AuthedCtx {
+  userId: string;
+  walletId: string | null;
+  apiKeyId: string | null;
+}
 
 export const authedProcedure = t.procedure
   .use(timingMiddleware)
   .use(async ({ ctx, next }) => {
-    if (ctx.session?.user) {
+    if (ctx.user) {
       const wallet = await db
         .select({ id: wallets.id })
         .from(wallets)
         .where(
           and(
-            eq(wallets.userId, ctx.session.user.id),
+            eq(wallets.userId, ctx.user.id),
             eq(wallets.isActive, true),
           ),
         )
@@ -88,9 +96,10 @@ export const authedProcedure = t.procedure
 
       return next({
         ctx: {
-          userId: ctx.session.user.id,
+          userId: ctx.user.id,
           walletId: wallet?.id ?? null,
-        },
+          apiKeyId: null,
+        } satisfies AuthedCtx,
       });
     }
 
@@ -101,7 +110,8 @@ export const authedProcedure = t.procedure
         ctx: {
           userId: apiKeyCtx.userId,
           walletId: apiKeyCtx.walletId,
-        },
+          apiKeyId: apiKeyCtx.apiKeyId,
+        } satisfies AuthedCtx,
       });
     } catch (err) {
       if (err instanceof ApiKeyError) {

@@ -6,7 +6,7 @@ import { env } from "~/env";
 import { BASE_MAINNET, BASE_SEPOLIA } from "@scuttlepay/shared";
 import { getServerWalletAddress } from "../lib/thirdweb";
 
-const DEMO_EMAIL = "demo@scuttlepay.com";
+const DEMO_THIRDWEB_ID = "0xDEMO0000000000000000000000000000000SEED";
 
 type Db = typeof db;
 
@@ -14,7 +14,7 @@ async function ensureUser(database: Db) {
   const existing = await database
     .select()
     .from(users)
-    .where(eq(users.email, DEMO_EMAIL))
+    .where(eq(users.thirdwebUserId, DEMO_THIRDWEB_ID))
     .limit(1);
 
   if (existing[0]) {
@@ -24,7 +24,11 @@ async function ensureUser(database: Db) {
 
   const [user] = await database
     .insert(users)
-    .values({ name: "Demo User", email: DEMO_EMAIL })
+    .values({
+      thirdwebUserId: DEMO_THIRDWEB_ID,
+      name: "Demo User",
+      email: "demo@scuttlepay.com",
+    })
     .returning();
 
   if (!user) throw new Error("Failed to create user");
@@ -32,7 +36,7 @@ async function ensureUser(database: Db) {
   return user;
 }
 
-async function ensureApiKey(database: Db, userId: string) {
+async function ensureAgent(database: Db, userId: string, walletId: string) {
   const existing = await database
     .select()
     .from(apiKeys)
@@ -40,8 +44,8 @@ async function ensureApiKey(database: Db, userId: string) {
     .limit(1);
 
   if (existing[0]) {
-    console.log(`API key exists: ${existing[0].keyPrefix}...`);
-    return;
+    console.log(`Agent exists: ${existing[0].keyPrefix}...`);
+    return existing[0].id;
   }
 
   const { raw, hash, prefix } = generateApiKey();
@@ -56,9 +60,23 @@ async function ensureApiKey(database: Db, userId: string) {
     })
     .returning();
 
-  if (!key) throw new Error("Failed to create API key");
-  console.log(`Created API key: ${key.id}`);
+  if (!key) throw new Error("Failed to create agent");
+
+  const maxPerTx = env.DEFAULT_MAX_PER_TX;
+  const dailyLimit = env.DEFAULT_DAILY_LIMIT;
+
+  await database.insert(spendingPolicies).values({
+    walletId,
+    apiKeyId: key.id,
+    name: "demo-agent",
+    maxPerTx,
+    dailyLimit,
+  });
+
+  console.log(`Created agent: ${key.id}`);
+  console.log(`  Spending: max $${maxPerTx}/tx, $${dailyLimit}/day`);
   console.log(`\n  API Key (save this — shown once): ${raw}\n`);
+  return key.id;
 }
 
 async function resolveWalletAddress(): Promise<string> {
@@ -88,7 +106,7 @@ async function ensureWallet(database: Db, userId: string) {
 
   const address = await resolveWalletAddress();
   const thirdwebId = env.THIRDWEB_WALLET_ID ?? "placeholder";
-  const chainId = env.CHAIN_ENV === "mainnet" ? BASE_MAINNET : BASE_SEPOLIA;
+  const chainId = env.NEXT_PUBLIC_CHAIN_ENV === "mainnet" ? BASE_MAINNET : BASE_SEPOLIA;
 
   const [wallet] = await database
     .insert(wallets)
@@ -100,39 +118,10 @@ async function ensureWallet(database: Db, userId: string) {
   return wallet;
 }
 
-async function ensureSpendingPolicy(database: Db, walletId: string) {
-  const existing = await database
-    .select()
-    .from(spendingPolicies)
-    .where(eq(spendingPolicies.walletId, walletId))
-    .limit(1);
-
-  if (existing[0]) {
-    console.log(
-      `Spending policy exists: max $${existing[0].maxPerTx}/tx, $${existing[0].dailyLimit}/day`,
-    );
-    return;
-  }
-
-  const maxPerTx = env.DEFAULT_MAX_PER_TX;
-  const dailyLimit = env.DEFAULT_DAILY_LIMIT;
-
-  const [policy] = await database
-    .insert(spendingPolicies)
-    .values({ walletId, maxPerTx, dailyLimit })
-    .returning();
-
-  if (!policy) throw new Error("Failed to create spending policy");
-  console.log(
-    `Created spending policy: max $${maxPerTx}/tx, $${dailyLimit}/day`,
-  );
-}
-
 async function seed() {
   const user = await ensureUser(db);
-  await ensureApiKey(db, user.id);
   const wallet = await ensureWallet(db, user.id);
-  await ensureSpendingPolicy(db, wallet.id);
+  await ensureAgent(db, user.id, wallet.id);
 
   console.log("\nSeed complete.");
 }

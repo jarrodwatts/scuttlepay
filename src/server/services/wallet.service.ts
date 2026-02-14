@@ -1,20 +1,20 @@
 import { and, eq } from "drizzle-orm";
+import type { Address } from "thirdweb";
 import { getContract } from "thirdweb";
 import { balanceOf } from "thirdweb/extensions/erc20";
+import { USDC_ADDRESSES, USDC_DECIMALS } from "@scuttlepay/shared";
 
 import { db } from "~/server/db";
 import { wallets } from "~/server/db/schema/wallet";
-import { activeChain, getThirdwebClient } from "~/server/lib/thirdweb";
+import {
+  activeChain,
+  chainId,
+  getThirdwebClient,
+  createUserServerWallet,
+} from "~/server/lib/thirdweb";
 
-const USDC_DECIMALS = 6;
-
-const USDC_ADDRESS: Record<number, string> = {
-  8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  84532: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-};
-
-function getUsdcAddress(): string {
-  const address = USDC_ADDRESS[activeChain.id];
+function getUsdcAddress(): Address {
+  const address = USDC_ADDRESSES[chainId];
   if (!address) {
     throw new WalletServiceError(
       "UNSUPPORTED_CHAIN",
@@ -69,31 +69,37 @@ export async function getBalance(walletId: string): Promise<string> {
   return formatBalance(raw);
 }
 
-export async function getWallet(walletId: string) {
-  return findWalletOrThrow(walletId);
+export async function getAddress(walletId: string): Promise<Address> {
+  const wallet = await findWalletOrThrow(walletId);
+  return wallet.address as Address;
 }
 
-export async function getWalletByUserId(userId: string) {
-  const wallet = await db
-    .select()
+export async function createWalletForUser(userId: string): Promise<string> {
+  const existing = await db
+    .select({ id: wallets.id })
     .from(wallets)
     .where(and(eq(wallets.userId, userId), eq(wallets.isActive, true)))
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (!wallet) {
-    throw new WalletServiceError(
-      "WALLET_NOT_FOUND",
-      `No active wallet found for user ${userId}`,
-    );
-  }
+  if (existing) return existing.id;
 
-  return wallet;
-}
+  const { address } = await createUserServerWallet(`user-${userId}`);
 
-export async function getAddress(walletId: string): Promise<string> {
-  const wallet = await findWalletOrThrow(walletId);
-  return wallet.address;
+  const [wallet] = await db
+    .insert(wallets)
+    .values({
+      userId,
+      address,
+      chainId: activeChain.id,
+      label: "default",
+      thirdwebId: address,
+    })
+    .returning({ id: wallets.id });
+
+  if (!wallet) throw new WalletServiceError("WALLET_NOT_FOUND", "Failed to create wallet");
+
+  return wallet.id;
 }
 
 export type WalletServiceErrorCode =
