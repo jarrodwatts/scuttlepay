@@ -16,21 +16,26 @@ export interface AuthUser {
   walletAddress: string;
 }
 
-export const thirdwebAuth = createAuth({
-  domain: env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
-  adminAccount: privateKeyToAccount({
+let _thirdwebAuth: ReturnType<typeof createAuth> | null = null;
+
+export function getThirdwebAuth() {
+  _thirdwebAuth ??= createAuth({
+    domain: env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
+    adminAccount: privateKeyToAccount({
+      client: getThirdwebClient(),
+      privateKey: env.THIRDWEB_AUTH_PRIVATE_KEY,
+    }),
     client: getThirdwebClient(),
-    privateKey: env.THIRDWEB_AUTH_PRIVATE_KEY,
-  }),
-  client: getThirdwebClient(),
-});
+  });
+  return _thirdwebAuth;
+}
 
 async function _getAuthUser(): Promise<AuthUser | null> {
   const c = await cookies();
   const jwt = c.get("jwt");
   if (!jwt?.value) return null;
 
-  const result = await thirdwebAuth.verifyJWT({ jwt: jwt.value });
+  const result = await getThirdwebAuth().verifyJWT({ jwt: jwt.value });
   if (!result.valid) return null;
 
   const walletAddress = result.parsedJWT.sub;

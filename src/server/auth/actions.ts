@@ -7,17 +7,17 @@ import type {
   VerifyLoginPayloadParams,
 } from "thirdweb/auth";
 
-import { thirdwebAuth } from "./index";
+import { getThirdwebAuth } from "./index";
 import { db } from "~/server/db";
 import { users } from "~/server/db/schema";
 import { createWalletForUser } from "~/server/services/wallet.service";
 
 export async function generatePayload(params: GenerateLoginPayloadParams) {
-  return thirdwebAuth.generatePayload(params);
+  return getThirdwebAuth().generatePayload(params);
 }
 
 export async function login(params: VerifyLoginPayloadParams) {
-  const verifiedPayload = await thirdwebAuth.verifyPayload(params);
+  const verifiedPayload = await getThirdwebAuth().verifyPayload(params);
   if (!verifiedPayload.valid) {
     throw new Error("Invalid login payload");
   }
@@ -46,7 +46,7 @@ export async function login(params: VerifyLoginPayloadParams) {
 
   await createWalletForUser(userId);
 
-  const jwt = await thirdwebAuth.generateJWT({
+  const jwt = await getThirdwebAuth().generateJWT({
     payload: verifiedPayload.payload,
   });
 
@@ -65,7 +65,7 @@ export async function isLoggedIn() {
   const jwt = c.get("jwt");
   if (!jwt?.value) return false;
 
-  const result = await thirdwebAuth.verifyJWT({ jwt: jwt.value });
+  const result = await getThirdwebAuth().verifyJWT({ jwt: jwt.value });
   return result.valid;
 }
 
