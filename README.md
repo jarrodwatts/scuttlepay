@@ -2,7 +2,10 @@
 
 # ScuttlePay
 
-A Claude Code plugin that lets your agent spend USDC. Search products, check balances, and make purchases on Shopify storefronts — settled on-chain via Base.
+[ScuttlePay](https://www.scuttlepay.com) lets AI agents pay for products online - no humans (or credit cards) required.
+
+- **For merchants**: Allow AI agents to discover and purchase products from your store.
+- **For agents**: Browse items and buy products - without any human intervention.
 
 ---
 
