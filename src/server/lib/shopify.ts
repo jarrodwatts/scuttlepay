@@ -1,7 +1,11 @@
-import { env } from "~/env";
-
 const STOREFRONT_API_VERSION = "2024-10";
 const ADMIN_API_VERSION = "2024-01";
+
+export interface ShopifyCredentials {
+  shopDomain: string;
+  accessToken: string;
+  storefrontToken?: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Storefront API (GraphQL)
@@ -12,31 +16,24 @@ interface GraphQLResponse<T> {
   errors?: Array<{ message: string; locations?: unknown[]; path?: string[] }>;
 }
 
-function getStorefrontUrl(): string {
-  const storeUrl = env.SHOPIFY_STORE_URL;
-  if (!storeUrl) {
-    throw new Error("SHOPIFY_STORE_URL is not configured");
-  }
-  return `${storeUrl}/api/${STOREFRONT_API_VERSION}/graphql.json`;
-}
-
-function getStorefrontToken(): string {
-  const token = env.SHOPIFY_STOREFRONT_PUBLIC_TOKEN;
-  if (!token) {
-    throw new Error("SHOPIFY_STOREFRONT_PUBLIC_TOKEN is not configured");
-  }
-  return token;
-}
-
 export async function storefrontQuery<T>(
+  creds: ShopifyCredentials,
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(getStorefrontUrl(), {
+  if (!creds.storefrontToken) {
+    throw new Error(
+      `No storefront token available for ${creds.shopDomain}`,
+    );
+  }
+
+  const url = `https://${creds.shopDomain}/api/${STOREFRONT_API_VERSION}/graphql.json`;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": getStorefrontToken(),
+      "X-Shopify-Storefront-Access-Token": creds.storefrontToken,
     },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(15_000),
@@ -66,22 +63,6 @@ export async function storefrontQuery<T>(
 // Admin API (REST)
 // ---------------------------------------------------------------------------
 
-function getAdminBaseUrl(): string {
-  const storeUrl = env.SHOPIFY_STORE_URL;
-  if (!storeUrl) {
-    throw new Error("SHOPIFY_STORE_URL is not configured");
-  }
-  return `${storeUrl}/admin/api/${ADMIN_API_VERSION}`;
-}
-
-function getAdminToken(): string {
-  const token = env.SHOPIFY_ADMIN_TOKEN;
-  if (!token) {
-    throw new Error("SHOPIFY_ADMIN_TOKEN is not configured");
-  }
-  return token;
-}
-
 export interface AdminApiResponse<T> {
   data: T;
 }
@@ -99,17 +80,18 @@ export class ShopifyAdminApiError extends Error {
 }
 
 export async function adminRequest<T>(
+  creds: ShopifyCredentials,
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<AdminApiResponse<T>> {
-  const url = `${getAdminBaseUrl()}${path}`;
+  const url = `https://${creds.shopDomain}/admin/api/${ADMIN_API_VERSION}${path}`;
 
   const response = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": getAdminToken(),
+      "X-Shopify-Access-Token": creds.accessToken,
     },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15_000),

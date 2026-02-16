@@ -5,6 +5,7 @@ import type {
   productSearchResultSchema,
   productDetailSchema,
   purchaseResultSchema,
+  merchantSchema,
 } from "./schemas.js";
 
 export type {
@@ -18,3 +19,4 @@ export type ProductVariant = z.infer<typeof productVariantSchema>;
 export type ProductSearchResult = z.infer<typeof productSearchResultSchema>;
 export type ProductDetail = z.infer<typeof productDetailSchema>;
 export type PurchaseResult = z.infer<typeof purchaseResultSchema>;
+export type MerchantInfo = z.infer<typeof merchantSchema>;

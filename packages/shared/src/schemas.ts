@@ -6,6 +6,7 @@ export const usdcAmountSchema = z
   .regex(/^\d+(\.\d{1,6})?$/, "Invalid USDC amount: up to 6 decimal places");
 
 export const purchaseRequestSchema = z.object({
+  merchantId: z.string().min(1),
   productId: z.string().min(1),
   variantId: z.string().optional(),
   quantity: z.number().int().positive().default(1),
@@ -13,10 +14,16 @@ export const purchaseRequestSchema = z.object({
 export type PurchaseRequest = z.infer<typeof purchaseRequestSchema>;
 
 export const productSearchParamsSchema = z.object({
+  merchantId: z.string().min(1, "Merchant ID is required"),
   q: z.string().min(1, "Search query is required"),
   limit: z.coerce.number().int().positive().max(50).default(10),
 });
 export type ProductSearchParams = z.infer<typeof productSearchParamsSchema>;
+
+export const merchantSchema = z.object({
+  id: z.string(),
+  shopDomain: z.string(),
+});
 
 export const transactionListParamsSchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -26,7 +33,7 @@ export type TransactionListParams = z.infer<typeof transactionListParamsSchema>;
 
 export const walletBalanceSchema = z.object({
   balance: usdcAmountSchema,
-  currency: z.literal("USDC"),
+  currency: z.literal("USD"),
   chain: z.string(),
 });
 

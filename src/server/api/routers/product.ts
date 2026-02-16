@@ -18,18 +18,18 @@ export const productRouter = createTRPCRouter({
     .output(z.array(productSearchResultSchema))
     .query(async ({ input }) => {
       try {
-        return await searchProducts(input.q, input.limit);
+        return await searchProducts(input.merchantId, input.q, input.limit);
       } catch (err) {
         mapServiceError(err);
       }
     }),
 
   getById: authedProcedure
-    .input(z.object({ productId: z.string().min(1) }))
+    .input(z.object({ merchantId: z.string().min(1), productId: z.string().min(1) }))
     .output(productDetailSchema)
     .query(async ({ input }) => {
       try {
-        return await getProduct(input.productId);
+        return await getProduct(input.merchantId, input.productId);
       } catch (err) {
         mapServiceError(err);
       }

@@ -30,6 +30,7 @@ export const purchaseRouter = createTRPCRouter({
         return await purchase({
           walletId,
           apiKeyId,
+          merchantId: input.merchantId,
           productId: input.productId,
           variantId: input.variantId,
           quantity: input.quantity,

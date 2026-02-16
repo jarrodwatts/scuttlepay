@@ -9,7 +9,9 @@ import {
   storefrontQuery,
   adminRequest,
   ShopifyAdminApiError,
+  type ShopifyCredentials,
 } from "~/server/lib/shopify";
+import * as merchantService from "./merchant.service";
 
 const CACHE_TTL_MS = 60_000;
 const CACHE_MAX_ENTRIES = 200;
@@ -42,6 +44,22 @@ function setCache<T>(key: string, data: T): void {
     if (oldest !== undefined) cache.delete(oldest);
   }
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+async function getMerchantCreds(merchantId: string): Promise<ShopifyCredentials> {
+  const merchant = await merchantService.getActiveMerchantById(merchantId);
+  if (!merchant) {
+    throw new ScuttlePayError({
+      code: ErrorCode.NOT_FOUND,
+      message: `Merchant ${merchantId} not found or inactive`,
+      metadata: { merchantId },
+    });
+  }
+  return {
+    shopDomain: merchant.shopDomain,
+    accessToken: merchant.accessToken,
+    storefrontToken: merchant.storefrontToken,
+  };
 }
 
 // --- Shopify GraphQL response types ---
@@ -186,16 +204,20 @@ function mapProductDetail(node: ShopifyProductNode): ProductDetail {
 }
 
 export async function searchProducts(
+  merchantId: string,
   query: string,
   first = 10,
 ): Promise<ProductSearchResult[]> {
-  const cacheKey = `search:${query}:${String(first)}`;
+  const cacheKey = `search:${merchantId}:${query}:${String(first)}`;
 
   const cached = getCached<ProductSearchResult[]>(cacheKey);
   if (cached) return cached;
 
+  const creds = await getMerchantCreds(merchantId);
+
   try {
     const data = await storefrontQuery<SearchProductsResponse>(
+      creds,
       SEARCH_PRODUCTS_QUERY,
       { query, first },
     );
@@ -210,16 +232,23 @@ export async function searchProducts(
   }
 }
 
-export async function getProduct(productId: string): Promise<ProductDetail> {
-  const cacheKey = `product:${productId}`;
+export async function getProduct(
+  merchantId: string,
+  productId: string,
+): Promise<ProductDetail> {
+  const cacheKey = `product:${merchantId}:${productId}`;
 
   const cached = getCached<ProductDetail>(cacheKey);
   if (cached) return cached;
 
+  const creds = await getMerchantCreds(merchantId);
+
   try {
-    const data = await storefrontQuery<GetProductResponse>(GET_PRODUCT_QUERY, {
-      id: productId,
-    });
+    const data = await storefrontQuery<GetProductResponse>(
+      creds,
+      GET_PRODUCT_QUERY,
+      { id: productId },
+    );
 
     if (!data.product) {
       throw new ScuttlePayError({
@@ -262,6 +291,7 @@ interface ShopifyDraftOrderResponse {
 }
 
 export interface CreateOrderParams {
+  merchantId: string;
   productTitle: string;
   variantId?: string;
   quantity: number;
@@ -285,6 +315,7 @@ function extractNumericId(gid: string): number {
 }
 
 async function adminCreateDraftOrder(
+  creds: ShopifyCredentials,
   params: CreateOrderParams,
 ): Promise<ShopifyDraftOrderResponse> {
   const lineItem: ShopifyDraftOrderLineItem = {
@@ -309,6 +340,7 @@ async function adminCreateDraftOrder(
   }
 
   const { data } = await adminRequest<ShopifyDraftOrderResponse>(
+    creds,
     "POST",
     "/draft_orders.json",
     { draft_order: draftOrder },
@@ -320,8 +352,10 @@ async function adminCreateDraftOrder(
 export async function createOrder(
   params: CreateOrderParams,
 ): Promise<CreateOrderResult> {
+  const creds = await getMerchantCreds(params.merchantId);
+
   try {
-    const response = await adminCreateDraftOrder(params);
+    const response = await adminCreateDraftOrder(creds, params);
 
     return {
       shopifyOrderId: response.draft_order.id,
@@ -329,10 +363,13 @@ export async function createOrder(
     };
   } catch (err) {
     if (err instanceof ShopifyAdminApiError && err.statusCode === 429) {
-      console.error("[createOrder] Rate limited, retrying once", { txHash: params.txHash, retryAfterMs: err.retryAfterMs });
+      console.error("[createOrder] Rate limited, retrying once", {
+        txHash: params.txHash,
+        retryAfterMs: err.retryAfterMs,
+      });
       await new Promise((r) => setTimeout(r, err.retryAfterMs ?? 2000));
       try {
-        const response = await adminCreateDraftOrder(params);
+        const response = await adminCreateDraftOrder(creds, params);
         return {
           shopifyOrderId: response.draft_order.id,
           orderNumber: response.draft_order.name,

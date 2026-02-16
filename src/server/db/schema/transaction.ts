@@ -3,6 +3,7 @@ import type { TransactionType, TransactionStatus, OrderStatus } from "@scuttlepa
 import { createTable } from "./table-creator";
 import { wallets } from "./wallet";
 import { apiKeys } from "./api-key";
+import { merchants } from "./merchant";
 
 export const transactions = createTable(
   "transaction",
@@ -32,6 +33,9 @@ export const transactions = createTable(
     merchantAddress: d.text(),
     productId: d.text(),
     productName: d.text(),
+    merchantId: d
+      .varchar({ length: 255 })
+      .references(() => merchants.id, { onDelete: "set null" }),
     storeUrl: d.text(),
     errorMessage: d.text(),
     metadata: d.jsonb().$type<Record<string, unknown>>(),
@@ -81,6 +85,9 @@ export const orders = createTable(
     quantity: d.integer().notNull().default(1),
     unitPriceUsdc: d.numeric({ precision: 20, scale: 6 }).notNull(),
     totalUsdc: d.numeric({ precision: 20, scale: 6 }).notNull(),
+    merchantId: d
+      .varchar({ length: 255 })
+      .references(() => merchants.id, { onDelete: "set null" }),
     storeUrl: d.text().notNull(),
     errorMessage: d.text(),
     createdAt: d

@@ -3,6 +3,7 @@ import { users } from "./auth";
 import { apiKeys } from "./api-key";
 import { wallets, spendingPolicies } from "./wallet";
 import { transactions, orders } from "./transaction";
+import { merchants } from "./merchant";
 
 export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(apiKeys),
@@ -50,6 +51,10 @@ export const transactionsRelations = relations(
       fields: [transactions.apiKeyId],
       references: [apiKeys.id],
     }),
+    merchant: one(merchants, {
+      fields: [transactions.merchantId],
+      references: [merchants.id],
+    }),
     orders: many(orders),
   }),
 );
@@ -63,4 +68,13 @@ export const ordersRelations = relations(orders, ({ one }) => ({
     fields: [orders.walletId],
     references: [wallets.id],
   }),
+  merchant: one(merchants, {
+    fields: [orders.merchantId],
+    references: [merchants.id],
+  }),
+}));
+
+export const merchantsRelations = relations(merchants, ({ many }) => ({
+  transactions: many(transactions),
+  orders: many(orders),
 }));

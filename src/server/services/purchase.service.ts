@@ -13,6 +13,7 @@ import { transactions, orders } from "~/server/db/schema/transaction";
 import { env } from "~/env";
 import { eq } from "drizzle-orm";
 import * as shopifyService from "./shopify.service";
+import * as merchantService from "./merchant.service";
 import * as walletService from "./wallet.service";
 import * as spendingService from "./spending.service";
 import * as paymentService from "./payment.service";
@@ -21,6 +22,7 @@ import { compareUsdc, multiplyUsdc } from "~/server/lib/usdc-math";
 interface PurchaseParams {
   walletId: string;
   apiKeyId: string;
+  merchantId: string;
   productId: string;
   variantId?: string;
   quantity?: number;
@@ -35,17 +37,6 @@ function getMerchantAddress(): string {
     });
   }
   return addr;
-}
-
-function getStoreUrl(): string {
-  const url = env.SHOPIFY_STORE_URL;
-  if (!url) {
-    throw new ScuttlePayError({
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "SHOPIFY_STORE_URL is not configured",
-    });
-  }
-  return url;
 }
 
 function resolvePrice(
@@ -74,17 +65,22 @@ function resolvePrice(
 export async function purchase(
   params: PurchaseParams,
 ): Promise<PurchaseResult> {
-  const { walletId, apiKeyId, productId, variantId, quantity = 1 } = params;
+  const { walletId, apiKeyId, merchantId, productId, variantId, quantity = 1 } = params;
   const merchantAddress = getMerchantAddress();
-  const storeUrl = getStoreUrl();
 
-  const product = await shopifyService.getProduct(productId);
+  const merchant = await merchantService.getActiveMerchantById(merchantId);
+  if (!merchant) {
+    throw new ScuttlePayError({
+      code: ErrorCode.NOT_FOUND,
+      message: `Merchant ${merchantId} not found or inactive`,
+      metadata: { merchantId },
+    });
+  }
+
+  const storeUrl = `https://${merchant.shopDomain}`;
+  const product = await shopifyService.getProduct(merchantId, productId);
   const { unitPrice, totalUsdc } = resolvePrice(product, variantId, quantity);
 
-  // Serializable transaction: spending eval + pending tx insert.
-  // The DB isolation prevents concurrent purchases from exceeding spending limits.
-  // NOTE: The on-chain balance check is a best-effort pre-check only — it reads
-  // from an external RPC and is NOT covered by the DB transaction's isolation.
   const txRow = await db.transaction(
     async (tx) => {
       const balance = await walletService.getBalance(walletId);
@@ -120,6 +116,7 @@ export async function purchase(
           status: TransactionStatus.PENDING,
           amountUsdc: totalUsdc,
           merchantAddress,
+          merchantId,
           productId,
           productName: product.title,
           storeUrl,
@@ -138,7 +135,6 @@ export async function purchase(
     { isolationLevel: "serializable" },
   );
 
-  // Payment settlement (outside the serializable tx — it's an external call)
   let settlement: paymentService.SettlementResult;
   try {
     settlement = await paymentService.signAndSettle(
@@ -164,7 +160,6 @@ export async function purchase(
     });
   }
 
-  // Update transaction to settled
   await db
     .update(transactions)
     .set({
@@ -174,7 +169,6 @@ export async function purchase(
     })
     .where(eq(transactions.id, txRow.id));
 
-  // Create Shopify order (non-fatal)
   let shopifyOrderId: string | null = null;
   let orderNumber: string | null = null;
   let orderStatus: OrderStatus = OrderStatus.CREATED;
@@ -184,6 +178,7 @@ export async function purchase(
 
   try {
     const orderResult = await shopifyService.createOrder({
+      merchantId,
       productTitle: product.title,
       variantId,
       quantity,
@@ -209,6 +204,7 @@ export async function purchase(
     shopifyOrderId,
     shopifyOrderNumber: orderNumber,
     status: orderStatus,
+    merchantId,
     productId,
     productName: product.title,
     variantId: variantId ?? null,

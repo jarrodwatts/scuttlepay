@@ -30,7 +30,7 @@ export const walletRouter = createTRPCRouter({
       const balance = await getBalance(walletId);
       return {
         balance,
-        currency: "USDC" as const,
+        currency: "USD" as const,
         chain: chainName,
       };
     } catch (err) {

@@ -18,6 +18,8 @@ export const env = createEnv({
     DEFAULT_MAX_PER_TX: z.string().default("10"),
     DEFAULT_DAILY_LIMIT: z.string().default("50"),
     MERCHANT_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+    SHOPIFY_APP_API_KEY: z.string().optional(),
+    SHOPIFY_APP_API_SECRET: z.string().optional(),
     FACILITATOR_URL: z
       .string()
       .url()
@@ -44,6 +46,8 @@ export const env = createEnv({
     DEFAULT_MAX_PER_TX: process.env.DEFAULT_MAX_PER_TX,
     DEFAULT_DAILY_LIMIT: process.env.DEFAULT_DAILY_LIMIT,
     MERCHANT_ADDRESS: process.env.MERCHANT_ADDRESS,
+    SHOPIFY_APP_API_KEY: process.env.SHOPIFY_APP_API_KEY,
+    SHOPIFY_APP_API_SECRET: process.env.SHOPIFY_APP_API_SECRET,
     FACILITATOR_URL: process.env.FACILITATOR_URL,
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
     NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN: process.env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
