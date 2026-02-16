@@ -19,8 +19,8 @@ export const env = createEnv({
     DEFAULT_DAILY_LIMIT: z.string().default("50"),
     SHOPIFY_APP_API_KEY: z.string().optional(),
     SHOPIFY_APP_API_SECRET: z.string().optional(),
-    STRIPE_SECRET_KEY: z.string(),
-    STRIPE_CONNECT_CLIENT_ID: z.string(),
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_CONNECT_CLIENT_ID: z.string().optional(),
   },
 
   client: {

@@ -75,6 +75,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const stripeUrl = new URL("https://connect.stripe.com/oauth/authorize");
     stripeUrl.searchParams.set("response_type", "code");
+    if (!env.STRIPE_CONNECT_CLIENT_ID) {
+      return NextResponse.json(
+        { error: "STRIPE_CONNECT_CLIENT_ID is not configured" },
+        { status: 500 },
+      );
+    }
     stripeUrl.searchParams.set("client_id", env.STRIPE_CONNECT_CLIENT_ID);
     stripeUrl.searchParams.set("scope", "read_write");
     stripeUrl.searchParams.set(
