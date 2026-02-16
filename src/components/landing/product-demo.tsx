@@ -103,15 +103,14 @@ export function ProductDemo({ className }: { className?: string }) {
               <motion.button className="absolute -top-16 right-0 bg-neutral-900/50 p-2 text-white ring-1 backdrop-blur-md">
                 <XIcon className="size-5" />
               </motion.button>
-              <div className="relative isolate z-[1] flex size-full items-center justify-center overflow-hidden border-2 border-border bg-card">
-                <div className="text-center">
-                  <p className="font-mono text-sm text-muted-foreground">
-                    Demo video coming soon
-                  </p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground/50">
-                    Click anywhere to close
-                  </p>
-                </div>
+              <div className="relative isolate z-[1] size-full overflow-hidden border-2 border-border">
+                <iframe
+                  src="https://www.youtube.com/embed/OKR_YtCgcXo?autoplay=1"
+                  title="ScuttlePay Demo"
+                  className="size-full"
+                  allowFullScreen
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                />
               </div>
             </motion.div>
           </motion.div>
