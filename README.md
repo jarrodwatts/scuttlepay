@@ -2,38 +2,9 @@
 
 A Claude Code plugin that lets your agent spend USDC. Search products, check balances, and make purchases on Shopify storefronts — settled on-chain via Base.
 
-[![License](https://img.shields.io/github/license/jarrodwatts/scuttlepay)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/jarrodwatts/scuttlepay)](https://github.com/jarrodwatts/scuttlepay/stargazers)
-
 ![ScuttlePay](scuttlepay-banner.png)
 
 ![Built with Opus 4.6 — a Claude Code hackathon](cc-hackathon.png)
-
-## Install
-
-Inside a Claude Code instance, run the following commands:
-
-**Step 1: Add the marketplace**
-```
-/plugin marketplace add jarrodwatts/scuttlepay
-```
-
-**Step 2: Install the plugin**
-
-```
-/plugin install scuttlepay
-```
-
-**Step 3: Set your environment variables**
-
-Get your API key from the [ScuttlePay dashboard](https://scuttlepay.com/dashboard/setup), then set:
-
-```bash
-export SCUTTLEPAY_API_KEY=sk_your_key_here
-export SCUTTLEPAY_API_URL=https://scuttlepay.com
-```
-
-Done! Ask Claude to check your balance or search for products.
 
 ---
 
