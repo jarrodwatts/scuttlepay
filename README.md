@@ -10,7 +10,9 @@
 
 - **For agents**: Browse items and buy products - without a human in the loop!
   1. A **User dashboard** where you can add funds and set spending limits for your AI agents.
-  2. An **agent skill** to allow agents to autonomously purchase products.
+  2. An **agent skill** to teach agents how to autonomously purchase products.
+
+![ScuttlePay merchant vs customer](scuttlepay-merchant-v-customer.png)
 
 ## How It Works
 
