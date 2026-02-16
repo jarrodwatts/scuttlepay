@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
+import { env } from "~/env";
 import {
   verifyHmac,
   exchangeCodeForToken,
@@ -62,6 +63,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   await upsertMerchant(domain, access_token, storefrontToken, scope);
+
+  const apiKey = env.SHOPIFY_APP_API_KEY;
+  if (apiKey) {
+    return NextResponse.redirect(`https://${domain}/admin/apps/${apiKey}`);
+  }
 
   const successUrl = new URL("/merchant/installed", req.nextUrl.origin);
   successUrl.searchParams.set("shop", domain);

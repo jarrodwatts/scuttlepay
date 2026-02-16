@@ -149,6 +149,78 @@ export async function createStorefrontAccessToken(
   return result.storefrontAccessToken.accessToken;
 }
 
+// ---------------------------------------------------------------------------
+// Session token verification (App Bridge v4 JWT)
+// ---------------------------------------------------------------------------
+
+interface SessionTokenPayload {
+  iss: string;
+  dest: string;
+  aud: string;
+  sub: string;
+  exp: number;
+  nbf: number;
+  iat: number;
+  jti: string;
+  sid: string;
+}
+
+export interface VerifiedSession {
+  shopDomain: string;
+  payload: SessionTokenPayload;
+}
+
+function base64UrlDecode(str: string): Buffer {
+  const padded = str.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(padded, "base64");
+}
+
+export function verifySessionToken(token: string): VerifiedSession {
+  const { apiKey, apiSecret } = requireAppCredentials();
+
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid session token format");
+  }
+
+  const [headerB64, payloadB64, signatureB64] = parts as [string, string, string];
+
+  const expectedSig = crypto
+    .createHmac("sha256", apiSecret)
+    .update(`${headerB64}.${payloadB64}`)
+    .digest("base64url");
+
+  if (
+    !crypto.timingSafeEqual(
+      Buffer.from(expectedSig),
+      Buffer.from(signatureB64),
+    )
+  ) {
+    throw new Error("Invalid session token signature");
+  }
+
+  const payload = JSON.parse(
+    base64UrlDecode(payloadB64).toString("utf-8"),
+  ) as SessionTokenPayload;
+
+  if (payload.aud !== apiKey) {
+    throw new Error("Session token audience mismatch");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.exp < nowSeconds) {
+    throw new Error("Session token expired");
+  }
+  if (payload.nbf > nowSeconds + 60) {
+    throw new Error("Session token not yet valid");
+  }
+
+  const dest = new URL(payload.dest);
+  const shopDomain = dest.hostname;
+
+  return { shopDomain, payload };
+}
+
 export function sanitizeShopDomain(shop: string): string | null {
   const cleaned = shop.trim().toLowerCase();
   if (/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(cleaned)) {

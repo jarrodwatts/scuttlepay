@@ -30,6 +30,7 @@ export const env = createEnv({
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: z.string(),
     NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN: z.string().default("localhost:3000"),
     NEXT_PUBLIC_CHAIN_ENV: z.enum(["mainnet", "testnet"]).default("testnet"),
+    NEXT_PUBLIC_SHOPIFY_APP_API_KEY: z.string().optional(),
   },
 
   runtimeEnv: {
@@ -52,6 +53,7 @@ export const env = createEnv({
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
     NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN: process.env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
     NEXT_PUBLIC_CHAIN_ENV: process.env.NEXT_PUBLIC_CHAIN_ENV,
+    NEXT_PUBLIC_SHOPIFY_APP_API_KEY: process.env.NEXT_PUBLIC_SHOPIFY_APP_API_KEY,
   },
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
