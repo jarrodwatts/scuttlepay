@@ -2,24 +2,15 @@
 
 # ScuttlePay
 
-[ScuttlePay](https://www.scuttlepay.com) lets AI agents pay for products online - no humans (or credit cards) required.
+[ScuttlePay](https://www.scuttlepay.com) lets AI agents buy things online - no humans (or credit cards) required.
 
 - **For merchants**: Allow AI agents to discover and purchase products from your store.
-- **For agents**: Browse items and buy products - without any human intervention.
+  1. A **Shopify plugin** that exposes your store's products to AI agents via both an API & MCP server.
+  2. An **admin dashboard** for merchants to see purchases made by AI agents on their store.
 
----
-
-## What is ScuttlePay?
-
-Wallet-as-a-service for AI agents. Your agent gets a USDC wallet, browses real Shopify stores, and buys products — all settled on-chain on Base.
-
-| What Your Agent Can Do | How |
-|------------------------|-----|
-| **Check balance** | "What's my ScuttlePay balance?" |
-| **Browse stores** | "List available merchants on ScuttlePay" |
-| **Search products** | "Search for headphones under $50" |
-| **Buy products** | "Buy the Sony WH-1000XM5" |
-| **View history** | "Show my recent transactions" |
+- **For agents**: Browse items and buy products - without a human in the loop!
+  1. A **User dashboard** where you can add funds and set spending limits for your AI agents.
+  2. An **admin dashboard** for users to see purchases made by their AI agents.
 
 ## How It Works
 
