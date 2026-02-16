@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { inAppWallet } from "thirdweb/wallets";
 
 import { thirdwebBrowserClient } from "~/lib/thirdweb-client";
+import { activeChain } from "~/lib/chain-config";
 import { ThirdwebWrapper } from "~/components/thirdweb-wrapper";
 import { AsciiBand } from "~/components/ui/ascii-band";
 import { GridCross } from "~/components/ui/grid-cross";
@@ -134,6 +135,7 @@ export default function LoginPage() {
 
             <ConnectEmbed
               client={thirdwebBrowserClient}
+              chain={activeChain}
               theme={SCUTTLEPAY_THEME}
               modalSize="wide"
               welcomeScreen={() => <WelcomeScreen />}

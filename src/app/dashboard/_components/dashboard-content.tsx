@@ -25,6 +25,14 @@ import {
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 
 const BuyWidget = dynamic(
   () => import("thirdweb/react").then((m) => ({ default: m.BuyWidget })),
@@ -90,7 +98,7 @@ function BalanceCard() {
 
 function AddFundsCard() {
   const { data: wallet } = api.wallet.getAddress.useQuery();
-  const [showWidget, setShowWidget] = useState(false);
+  const [open, setOpen] = useState(false);
   const utils = api.useUtils();
 
   if (!wallet?.address) {
@@ -106,37 +114,38 @@ function AddFundsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!showWidget ? (
-          <Button onClick={() => setShowWidget(true)}>
-            <Plus className="mr-2 size-3.5" />
-            Add Funds
-          </Button>
-        ) : (
-          <div className="flex flex-col gap-4">
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 size-3.5" />
+              Add Funds
+            </Button>
+          </DialogTrigger>
+          <DialogContent showCloseButton={false} className="max-w-md border-none bg-transparent p-0 shadow-none md:left-[calc(50%+120px)]">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Add Funds</DialogTitle>
+              <DialogDescription>
+                Deposit USDC via credit card or crypto transfer.
+              </DialogDescription>
+            </DialogHeader>
             <BuyWidget
               client={thirdwebBrowserClient}
               chain={activeChain}
-              tokenAddress={USDC_TOKEN_ADDRESS}
               receiverAddress={wallet.address}
+              tokenAddress={USDC_TOKEN_ADDRESS}
+              paymentMethods={["card", "crypto"]}
               title="Add Funds"
               showThirdwebBranding={false}
               presetOptions={[10, 25, 50]}
               theme="dark"
+              tokenEditable={false}
               onSuccess={() => {
                 void utils.wallet.getBalance.invalidate();
-                setShowWidget(false);
+                setOpen(false);
               }}
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start"
-              onClick={() => setShowWidget(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
