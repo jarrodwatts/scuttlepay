@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Package, ShoppingCart, DollarSign, ExternalLink } from "lucide-react";
 
 import { useAppBridge } from "~/components/merchant/app-bridge-provider";
+import { BLOCK_EXPLORER_URL } from "~/lib/chain-config";
 import {
   Card,
   CardContent,
@@ -268,7 +269,7 @@ function OrdersTable({
             <TableCell>
               {order.txHash ? (
                 <a
-                  href={`https://basescan.org/tx/${order.txHash}`}
+                  href={`${BLOCK_EXPLORER_URL}/tx/${order.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:underline"
