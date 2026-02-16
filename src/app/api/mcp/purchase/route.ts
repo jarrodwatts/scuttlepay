@@ -10,7 +10,17 @@ import {
 import { purchase } from "~/server/services/purchase.service";
 
 export const POST = withApiKey(async (req: NextRequest, ctx) => {
-  const body: unknown = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    const err = new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: "Request body is not valid JSON",
+    });
+    return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
+  }
+
   const parsed = purchaseRequestSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -29,6 +39,10 @@ export const POST = withApiKey(async (req: NextRequest, ctx) => {
     productId: parsed.data.productId,
     variantId: parsed.data.variantId,
     quantity: parsed.data.quantity,
+    customerEmail: parsed.data.customerEmail,
+    customerFirstName: parsed.data.customerFirstName,
+    customerLastName: parsed.data.customerLastName,
+    shippingAddress: parsed.data.shippingAddress,
   });
 
   return NextResponse.json({ data: result });

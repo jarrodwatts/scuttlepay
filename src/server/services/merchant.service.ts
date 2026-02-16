@@ -1,4 +1,6 @@
 import { eq, and } from "drizzle-orm";
+import { ErrorCode, ScuttlePayError } from "@scuttlepay/shared";
+
 import { db } from "~/server/db";
 import { merchants } from "~/server/db/schema/merchant";
 
@@ -8,6 +10,7 @@ export interface Merchant {
   accessToken: string;
   storefrontToken: string | null;
   scopes: string;
+  stripeAccountId: string | null;
   isActive: boolean;
 }
 
@@ -82,7 +85,11 @@ export async function upsertMerchant(
       .returning();
 
     if (!updated) {
-      throw new Error(`Failed to update merchant ${shopDomain}`);
+      throw new ScuttlePayError({
+        code: ErrorCode.DATABASE_ERROR,
+        message: `Failed to update merchant ${shopDomain}`,
+        metadata: { shopDomain },
+      });
     }
     return updated;
   }
@@ -98,7 +105,30 @@ export async function upsertMerchant(
     .returning();
 
   if (!created) {
-    throw new Error(`Failed to create merchant ${shopDomain}`);
+    throw new ScuttlePayError({
+      code: ErrorCode.DATABASE_ERROR,
+      message: `Failed to create merchant ${shopDomain}`,
+      metadata: { shopDomain },
+    });
   }
   return created;
+}
+
+export async function setStripeAccountId(
+  merchantId: string,
+  stripeAccountId: string,
+): Promise<void> {
+  const [updated] = await db
+    .update(merchants)
+    .set({ stripeAccountId })
+    .where(eq(merchants.id, merchantId))
+    .returning({ id: merchants.id });
+
+  if (!updated) {
+    throw new ScuttlePayError({
+      code: ErrorCode.NOT_FOUND,
+      message: `Failed to set Stripe account: merchant ${merchantId} not found`,
+      metadata: { merchantId },
+    });
+  }
 }

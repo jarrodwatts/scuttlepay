@@ -35,3 +35,13 @@ export function addUsdc(a: string, b: string): string {
 export function isPositiveUsdc(amount: string): boolean {
   return parseUsdc(amount) > 0n;
 }
+
+export function usdcToCents(amount: string): number {
+  const raw = parseUsdc(amount);
+  const cents = (raw + 5_000n) / 10_000n;
+  return Number(cents);
+}
+
+export function subtractUsdc(a: string, b: string): string {
+  return formatUsdc(parseUsdc(a) - parseUsdc(b));
+}

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { transactionListParamsSchema, transactionSchema, OrderStatus } from "@scuttlepay/shared";
 
 import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
-import { db } from "~/server/db";
 import { transactions } from "~/server/db/schema/transaction";
 import { apiKeys } from "~/server/db/schema/api-key";
 import { requireWalletId } from "~/server/lib/require-wallet";
@@ -52,7 +51,7 @@ export const transactionRouter = createTRPCRouter({
         conditions.push(lt(transactions.createdAt, cursorDate));
       }
 
-      const rows = await db
+      const rows = await ctx.db
         .select({
           transaction: transactions,
           agentName: apiKeys.name,
@@ -81,7 +80,7 @@ export const transactionRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const walletId = requireWalletId(ctx.walletId);
 
-      const row = await db.query.transactions.findFirst({
+      const row = await ctx.db.query.transactions.findFirst({
         where: and(
           eq(transactions.id, input.id),
           eq(transactions.walletId, walletId),

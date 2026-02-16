@@ -12,6 +12,7 @@ export const merchants = createTable(
     accessToken: d.text().notNull(),
     storefrontToken: d.text(),
     scopes: d.text().notNull(),
+    stripeAccountId: d.text(),
     isActive: d.boolean().notNull().default(true),
     installedAt: d
       .timestamp({ withTimezone: true })

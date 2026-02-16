@@ -6,11 +6,11 @@ import {
   OrderStatus,
   type PurchaseResult,
   type ProductDetail,
+  type PurchaseRequest,
 } from "@scuttlepay/shared";
 
 import { db } from "~/server/db";
 import { transactions, orders } from "~/server/db/schema/transaction";
-import { env } from "~/env";
 import { eq } from "drizzle-orm";
 import * as shopifyService from "./shopify.service";
 import * as merchantService from "./merchant.service";
@@ -19,25 +19,10 @@ import * as spendingService from "./spending.service";
 import * as paymentService from "./payment.service";
 import { compareUsdc, multiplyUsdc } from "~/server/lib/usdc-math";
 
-interface PurchaseParams {
+type PurchaseParams = PurchaseRequest & {
   walletId: string;
   apiKeyId: string;
-  merchantId: string;
-  productId: string;
-  variantId?: string;
-  quantity?: number;
-}
-
-function getMerchantAddress(): string {
-  const addr = env.MERCHANT_ADDRESS;
-  if (!addr) {
-    throw new ScuttlePayError({
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "MERCHANT_ADDRESS is not configured",
-    });
-  }
-  return addr;
-}
+};
 
 function resolvePrice(
   product: ProductDetail,
@@ -66,13 +51,20 @@ export async function purchase(
   params: PurchaseParams,
 ): Promise<PurchaseResult> {
   const { walletId, apiKeyId, merchantId, productId, variantId, quantity = 1 } = params;
-  const merchantAddress = getMerchantAddress();
 
   const merchant = await merchantService.getActiveMerchantById(merchantId);
   if (!merchant) {
     throw new ScuttlePayError({
       code: ErrorCode.NOT_FOUND,
       message: `Merchant ${merchantId} not found or inactive`,
+      metadata: { merchantId },
+    });
+  }
+
+  if (!merchant.stripeAccountId) {
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: "Merchant has not completed Stripe onboarding",
       metadata: { merchantId },
     });
   }
@@ -115,7 +107,6 @@ export async function purchase(
           type: TransactionType.PURCHASE,
           status: TransactionStatus.PENDING,
           amountUsdc: totalUsdc,
-          merchantAddress,
           merchantId,
           productId,
           productName: product.title,
@@ -137,10 +128,10 @@ export async function purchase(
 
   let settlement: paymentService.SettlementResult;
   try {
-    settlement = await paymentService.signAndSettle(
+    settlement = await paymentService.settleWithStripe(
       walletId,
       totalUsdc,
-      merchantAddress,
+      merchant.stripeAccountId,
     );
   } catch (err) {
     await db
@@ -160,21 +151,28 @@ export async function purchase(
     });
   }
 
-  await db
-    .update(transactions)
-    .set({
-      status: TransactionStatus.SETTLED,
+  try {
+    await db
+      .update(transactions)
+      .set({
+        status: TransactionStatus.SETTLED,
+        txHash: settlement.txHash,
+        settledAt: settlement.settledAt,
+      })
+      .where(eq(transactions.id, txRow.id));
+  } catch (err) {
+    console.error("[purchase] Failed to update transaction to SETTLED", {
+      transactionId: txRow.id,
       txHash: settlement.txHash,
-      settledAt: settlement.settledAt,
-    })
-    .where(eq(transactions.id, txRow.id));
+      stripePaymentIntentId: settlement.stripePaymentIntentId,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+  }
 
   let shopifyOrderId: string | null = null;
   let orderNumber: string | null = null;
   let orderStatus: OrderStatus = OrderStatus.CREATED;
   let orderError: string | null = null;
-
-  const walletAddress = await walletService.getAddress(walletId);
 
   try {
     const orderResult = await shopifyService.createOrder({
@@ -183,10 +181,14 @@ export async function purchase(
       variantId,
       quantity,
       priceUsdc: unitPrice,
-      txHash: settlement.txHash,
-      walletAddress,
+      totalUsdc,
+      stripePaymentIntentId: settlement.stripePaymentIntentId,
+      customerEmail: params.customerEmail,
+      customerFirstName: params.customerFirstName,
+      customerLastName: params.customerLastName,
+      shippingAddress: params.shippingAddress,
     });
-    shopifyOrderId = String(orderResult.shopifyOrderId);
+    shopifyOrderId = orderResult.shopifyOrderId;
     orderNumber = orderResult.orderNumber;
   } catch (err) {
     orderStatus = OrderStatus.FAILED;
@@ -198,22 +200,32 @@ export async function purchase(
     });
   }
 
-  await db.insert(orders).values({
-    transactionId: txRow.id,
-    walletId,
-    shopifyOrderId,
-    shopifyOrderNumber: orderNumber,
-    status: orderStatus,
-    merchantId,
-    productId,
-    productName: product.title,
-    variantId: variantId ?? null,
-    quantity,
-    unitPriceUsdc: unitPrice,
-    totalUsdc,
-    storeUrl,
-    errorMessage: orderError,
-  });
+  try {
+    await db.insert(orders).values({
+      transactionId: txRow.id,
+      walletId,
+      shopifyOrderId,
+      shopifyOrderNumber: orderNumber,
+      status: orderStatus,
+      merchantId,
+      productId,
+      productName: product.title,
+      variantId: variantId ?? null,
+      quantity,
+      unitPriceUsdc: unitPrice,
+      totalUsdc,
+      storeUrl,
+      errorMessage: orderError,
+    });
+  } catch (err) {
+    console.error("[purchase] Failed to insert order record", {
+      transactionId: txRow.id,
+      txHash: settlement.txHash,
+      shopifyOrderId,
+      orderNumber,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+  }
 
   return {
     transactionId: txRow.id,

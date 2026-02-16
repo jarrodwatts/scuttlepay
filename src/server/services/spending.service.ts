@@ -1,7 +1,7 @@
 import { and, eq, gte, sum, type ExtractTablesWithRelations } from "drizzle-orm";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
-import { TransactionStatus } from "@scuttlepay/shared";
+import { ErrorCode, ScuttlePayError, TransactionStatus } from "@scuttlepay/shared";
 
 import { db } from "~/server/db";
 import type * as schema from "~/server/db/schema/index";
@@ -21,20 +21,6 @@ export interface SpendingDenial {
 export type SpendingEvaluation =
   | { allowed: true }
   | { allowed: false; denial: SpendingDenial };
-
-export type SpendingServiceErrorCode =
-  | "POLICY_NOT_FOUND"
-  | "INVALID_AMOUNT";
-
-export class SpendingServiceError extends Error {
-  code: SpendingServiceErrorCode;
-
-  constructor(code: SpendingServiceErrorCode, message: string) {
-    super(message);
-    this.name = "SpendingServiceError";
-    this.code = code;
-  }
-}
 
 function todayUtcStart(): Date {
   const now = new Date();
@@ -61,10 +47,11 @@ export async function getPolicy(apiKeyId: string, executor: DbOrTx = db) {
     .then((rows) => rows[0]);
 
   if (!policy) {
-    throw new SpendingServiceError(
-      "POLICY_NOT_FOUND",
-      `No active spending policy found for agent ${apiKeyId}`,
-    );
+    throw new ScuttlePayError({
+      code: ErrorCode.NOT_FOUND,
+      message: `No active spending policy found for agent ${apiKeyId}`,
+      metadata: { apiKeyId },
+    });
   }
 
   return policy;
@@ -97,10 +84,11 @@ export async function evaluate(
   executor: DbOrTx = db,
 ): Promise<SpendingEvaluation> {
   if (!isPositiveUsdc(amountUsdc)) {
-    throw new SpendingServiceError(
-      "INVALID_AMOUNT",
-      `Invalid amount: ${amountUsdc}`,
-    );
+    throw new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: `Invalid amount: ${amountUsdc}`,
+      metadata: { amountUsdc },
+    });
   }
 
   const policy = await getPolicy(apiKeyId, executor);

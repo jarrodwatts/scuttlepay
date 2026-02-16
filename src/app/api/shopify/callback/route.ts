@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "~/env";
@@ -62,7 +63,36 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     console.error("[shopify/callback] Failed to create storefront token", err);
   }
 
-  await upsertMerchant(domain, access_token, storefrontToken, scope);
+  const merchant = await upsertMerchant(
+    domain,
+    access_token,
+    storefrontToken,
+    scope,
+  );
+
+  if (!merchant.stripeAccountId) {
+    const connectState = crypto.randomUUID();
+
+    const stripeUrl = new URL("https://connect.stripe.com/oauth/authorize");
+    stripeUrl.searchParams.set("response_type", "code");
+    stripeUrl.searchParams.set("client_id", env.STRIPE_CONNECT_CLIENT_ID);
+    stripeUrl.searchParams.set("scope", "read_write");
+    stripeUrl.searchParams.set(
+      "redirect_uri",
+      new URL("/api/stripe/connect/callback", req.nextUrl.origin).toString(),
+    );
+    stripeUrl.searchParams.set("state", `${connectState}:${merchant.id}`);
+
+    cookieStore.set("stripe_connect_state", connectState, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 600,
+    });
+
+    return NextResponse.redirect(stripeUrl.toString());
+  }
 
   const apiKey = env.SHOPIFY_APP_API_KEY;
   if (apiKey) {
