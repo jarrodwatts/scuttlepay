@@ -1,14 +1,13 @@
 import { cn } from "~/lib/utils";
 
 const PATTERNS = {
-  dots: "\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7",
-  crosshatch:
-    "+ \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 + \u00b7 +",
-  dither:
-    "\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592\u2591\u2591\u2592\u2592",
-  binary:
-    "01 10 01 11 00 10 01 10 11 00 01 10 01 11 00 10 01 10 11 00 01 10 01 11 00 10 01 10 11 00 01 10 01 11 00 10 01 10 11 00 01 10 01 11 00 10 01 10 11 00 01 10 01 11 00 10 01 10 11 00",
+  dots: "· ",
+  crosshatch: "+ · ",
+  dither: "░░▒▒",
+  binary: "01 10 01 11 00 10 01 10 11 00 ",
 } as const;
+
+const REPEAT_COUNT = 200;
 
 function AsciiBand({
   pattern = "dots",
@@ -25,7 +24,7 @@ function AsciiBand({
         className,
       )}
     >
-      {PATTERNS[pattern]}
+      {PATTERNS[pattern].repeat(REPEAT_COUNT)}
     </div>
   );
 }
