@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 
 import { getAuthUser } from "~/server/auth";
@@ -22,11 +23,15 @@ export default async function DashboardLayout({
       <aside className="relative hidden w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground md:block">
         <GridCross position="top-right" />
         <div className="flex h-14 items-center border-b px-6">
-          <Link
-            href="/"
-            className="font-mono text-sm font-semibold uppercase tracking-widest"
-          >
-            ScuttlePay
+          <Link href="/">
+            <Image
+              src="/scuttlepay-text.png"
+              alt="ScuttlePay"
+              width={750}
+              height={200}
+              className="h-6 w-auto"
+              priority
+            />
           </Link>
         </div>
         <SidebarNav />

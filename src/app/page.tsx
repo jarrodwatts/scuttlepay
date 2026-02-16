@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -17,9 +18,16 @@ export default async function Home() {
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col border-x border-border">
       {/* Nav */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/80 px-6 py-4 backdrop-blur-md lg:px-12">
-        <span className="font-mono text-sm font-semibold uppercase tracking-widest">
-          ScuttlePay
-        </span>
+        <Link href="/">
+          <Image
+            src="/scuttlepay-text.png"
+            alt="ScuttlePay"
+            width={750}
+            height={200}
+            className="h-8 w-auto"
+            priority
+          />
+        </Link>
         <nav className="hidden items-center gap-8 sm:flex">
           <a
             href="#features"
