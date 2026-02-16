@@ -10,7 +10,7 @@
 
 - **For agents**: Browse items and buy products - without a human in the loop!
   1. A **User dashboard** where you can add funds and set spending limits for your AI agents.
-  2. An **admin dashboard** for users to see purchases made by their AI agents.
+  2. ScuttlePay skill & MCP server to allow agents to autonomously purchase products.
 
 ## How It Works
 
