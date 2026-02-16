@@ -8,21 +8,22 @@ export function registerGetProduct(server: McpServer, client: ApiClient) {
     description:
       "Get detailed information about a specific product including all variants, descriptions, images, and exact pricing.",
     inputSchema: {
+      merchantId: z.string().describe("Merchant ID the product belongs to"),
       productId: z.string().describe("Product ID from search results"),
     },
-  }, async ({ productId }) => {
+  }, async ({ merchantId, productId }) => {
     try {
-      const product = await client.getProduct(productId);
+      const product = await client.getProduct(merchantId, productId);
 
       const variantLines = product.variants.map(
-        (v) => `  - ${v.title}: $${v.priceUsdc} USDC (variant ID: ${v.id})`,
+        (v) => `  - ${v.title}: $${v.priceUsdc} (variant ID: ${v.id})`,
       );
 
       const imageLines = product.images.map((url) => `  - ${url}`);
 
       const sections = [
         `${product.title}`,
-        `Price: $${product.priceUsdc} USDC`,
+        `Price: $${product.priceUsdc}`,
         "",
         product.description,
       ];

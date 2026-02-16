@@ -6,12 +6,21 @@ import { searchProducts, getProduct } from "~/server/services/shopify.service";
 
 export const GET = withApiKey(async (req: NextRequest, _ctx) => {
   const { searchParams } = new URL(req.url);
+  const merchantId = searchParams.get("merchantId");
   const query = searchParams.get("q");
   const productId = searchParams.get("id");
   const limit = Math.min(Number(searchParams.get("limit") ?? "10"), 50);
 
+  if (!merchantId) {
+    const err = new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: "Missing required 'merchantId' query parameter",
+    });
+    return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
+  }
+
   if (productId) {
-    const product = await getProduct(productId);
+    const product = await getProduct(merchantId, productId);
     return NextResponse.json({ data: product });
   }
 
@@ -23,6 +32,6 @@ export const GET = withApiKey(async (req: NextRequest, _ctx) => {
     return NextResponse.json(toApiResponse(err), { status: err.httpStatus });
   }
 
-  const results = await searchProducts(query, limit);
+  const results = await searchProducts(merchantId, query, limit);
   return NextResponse.json({ data: results });
 });

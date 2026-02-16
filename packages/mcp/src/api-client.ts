@@ -4,6 +4,7 @@ import {
   type ProductSearchResult,
   type ProductDetail,
   type PurchaseResult,
+  type MerchantInfo,
 } from "@scuttlepay/shared";
 import type { Config } from "./config.js";
 
@@ -60,19 +61,34 @@ export class ApiClient {
     };
   }
 
+  async listMerchants(): Promise<MerchantInfo[]> {
+    const { data } = await this.get<{ data: MerchantInfo[] }>(
+      "/api/mcp/merchants",
+    );
+    return data;
+  }
+
   async searchProducts(
+    merchantId: string,
     query: string,
     limit = 10,
   ): Promise<ProductSearchResult[]> {
-    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    const params = new URLSearchParams({
+      merchantId,
+      q: query,
+      limit: String(limit),
+    });
     const { data } = await this.get<{ data: ProductSearchResult[] }>(
       `/api/mcp/products?${params.toString()}`,
     );
     return data;
   }
 
-  async getProduct(id: string): Promise<ProductDetail> {
-    const params = new URLSearchParams({ id });
+  async getProduct(
+    merchantId: string,
+    id: string,
+  ): Promise<ProductDetail> {
+    const params = new URLSearchParams({ merchantId, id });
     const { data } = await this.get<{ data: ProductDetail }>(
       `/api/mcp/products?${params.toString()}`,
     );
@@ -80,6 +96,7 @@ export class ApiClient {
   }
 
   async purchase(input: {
+    merchantId: string;
     productId: string;
     variantId?: string;
     quantity?: number;

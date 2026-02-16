@@ -5,7 +5,7 @@ import type { ApiClient } from "../api-client.js";
 export function registerGetBalance(server: McpServer, client: ApiClient) {
   server.registerTool("get_balance", {
     description:
-      "Check your current ScuttlePay wallet balance in USDC.",
+      "Check your current ScuttlePay wallet balance.",
   }, async () => {
     try {
       const balance = await client.getBalance();
@@ -14,7 +14,7 @@ export function registerGetBalance(server: McpServer, client: ApiClient) {
         content: [
           {
             type: "text" as const,
-            text: `Your ScuttlePay balance is $${balance} USDC`,
+            text: `Your ScuttlePay balance is $${balance}`,
           },
         ],
       };

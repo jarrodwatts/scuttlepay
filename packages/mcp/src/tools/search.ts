@@ -6,13 +6,14 @@ import type { ApiClient } from "../api-client.js";
 export function registerSearchProducts(server: McpServer, client: ApiClient) {
   server.registerTool("search_products", {
     description:
-      "Search for products available for purchase. Returns product names, prices in USDC, and IDs. Use a product ID from the results to get details or buy.",
+      "Search for products available for purchase from a specific merchant. Returns product names, prices, and IDs. Use list_merchants first to get a merchant ID.",
     inputSchema: {
+      merchantId: z.string().describe("Merchant ID to search products from"),
       query: z.string().describe("Search query for products"),
     },
-  }, async ({ query }) => {
+  }, async ({ merchantId, query }) => {
     try {
-      const products = await client.searchProducts(query);
+      const products = await client.searchProducts(merchantId, query);
 
       if (products.length === 0) {
         return {
@@ -26,7 +27,7 @@ export function registerSearchProducts(server: McpServer, client: ApiClient) {
       }
 
       const lines = products.map(
-        (p) => `${p.title} — $${p.priceUsdc} USDC (ID: ${p.id})`,
+        (p) => `${p.title} — $${p.priceUsdc} (ID: ${p.id})`,
       );
 
       return {

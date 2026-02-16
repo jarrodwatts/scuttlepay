@@ -8,8 +8,9 @@ const BASESCAN_TX_URL = "https://basescan.org/tx/";
 export function registerBuy(server: McpServer, client: ApiClient) {
   server.registerTool("buy", {
     description:
-      "Purchase a product using your ScuttlePay wallet. Pays with USDC via x402 protocol. Returns order confirmation with blockchain transaction hash.",
+      "Purchase a product from a merchant using your ScuttlePay wallet. Returns order confirmation with transaction details.",
     inputSchema: {
+      merchantId: z.string().describe("Merchant ID to purchase from"),
       productId: z.string().describe("Product ID to purchase"),
       variantId: z
         .string()
@@ -22,16 +23,16 @@ export function registerBuy(server: McpServer, client: ApiClient) {
         .optional()
         .describe("Quantity to purchase (defaults to 1)"),
     },
-  }, async ({ productId, variantId, quantity }) => {
+  }, async ({ merchantId, productId, variantId, quantity }) => {
     try {
-      const result = await client.purchase({ productId, variantId, quantity });
+      const result = await client.purchase({ merchantId, productId, variantId, quantity });
 
       const orderPart = result.orderNumber
         ? ` Order #${result.orderNumber}.`
         : "";
 
       const text = [
-        `Purchased ${result.product.name} for $${result.amount} USDC.${orderPart}`,
+        `Purchased ${result.product.name} for $${result.amount}.${orderPart}`,
         `Transaction: ${result.txHash}`,
         `Verify on Basescan: ${BASESCAN_TX_URL}${result.txHash}`,
       ].join("\n");

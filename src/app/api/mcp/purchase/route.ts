@@ -25,6 +25,7 @@ export const POST = withApiKey(async (req: NextRequest, ctx) => {
   const result = await purchase({
     walletId: ctx.walletId,
     apiKeyId: ctx.apiKeyId,
+    merchantId: parsed.data.merchantId,
     productId: parsed.data.productId,
     variantId: parsed.data.variantId,
     quantity: parsed.data.quantity,

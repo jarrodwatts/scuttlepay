@@ -37,7 +37,7 @@ export function registerGetTransactions(server: McpServer, client: ApiClient) {
       const lines = rows.map((tx) => {
         const date = formatDate(tx.initiatedAt);
         const hash = tx.txHash ?? "pending";
-        return `${date} — ${tx.productName} — $${tx.amountUsdc} USDC — ${tx.status} — tx: ${hash}`;
+        return `${date} — ${tx.productName} — $${tx.amountUsdc} — ${tx.status} — tx: ${hash}`;
       });
 
       return {

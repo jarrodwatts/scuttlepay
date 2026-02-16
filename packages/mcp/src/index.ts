@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { ApiClient } from "./api-client.js";
+import { registerListMerchants } from "./tools/merchants.js";
 import { registerSearchProducts } from "./tools/search.js";
 import { registerGetProduct } from "./tools/product.js";
 import { registerBuy } from "./tools/buy.js";
@@ -19,6 +20,7 @@ const server = new McpServer({
   version: packageJson.version,
 });
 
+registerListMerchants(server, client);
 registerSearchProducts(server, client);
 registerGetProduct(server, client);
 registerBuy(server, client);
