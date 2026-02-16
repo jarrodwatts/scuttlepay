@@ -86,7 +86,7 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-4 pt-6">
+      <CardContent className="flex items-center gap-4">
         <div className="flex size-10 items-center justify-center border border-accent/30 bg-accent/10">
           <Icon className="size-5 text-accent" />
         </div>
@@ -107,7 +107,7 @@ function StatsRow({ stats, loading }: { stats: Stats | null; loading: boolean })
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
           <Card key={i}>
-            <CardContent className="pt-6">
+            <CardContent>
               <Skeleton className="h-16 w-full" />
             </CardContent>
           </Card>
@@ -130,7 +130,7 @@ function StatsRow({ stats, loading }: { stats: Stats | null; loading: boolean })
       />
       <StatCard
         label="Revenue (USDC)"
-        value={`$${stats?.totalRevenue ?? "0.00"}`}
+        value={`$${Number(stats?.totalRevenue ?? 0).toFixed(2)}`}
         icon={DollarSign}
       />
     </div>
@@ -185,7 +185,7 @@ function ProductGrid({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{product.title}</p>
             <p className="font-mono text-xs text-accent">
-              ${product.priceUsdc} USDC
+              ${Number(product.priceUsdc).toFixed(2)} USDC
             </p>
           </div>
         </div>
@@ -255,7 +255,7 @@ function OrdersTable({
             </TableCell>
             <TableCell>{order.quantity}</TableCell>
             <TableCell className="font-mono">
-              ${order.totalUsdc}
+              ${Number(order.totalUsdc).toFixed(2)}
             </TableCell>
             <TableCell>
               <Badge variant={statusVariant(order.status)}>
