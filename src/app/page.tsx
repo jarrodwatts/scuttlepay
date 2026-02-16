@@ -52,12 +52,19 @@ export default async function Home() {
           services autonomously — on-chain, with full visibility.
         </p>
 
-        <Button asChild variant="accent" size="lg" className="relative">
-          <Link href={ctaHref}>
-            Get started
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
+        <div className="relative flex flex-wrap items-center justify-center gap-4">
+          <Button asChild variant="accent" size="lg">
+            <Link href={ctaHref}>
+              Get started
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg">
+            <a href="#merchants">
+              I&rsquo;m a merchant
+            </a>
+          </Button>
+        </div>
 
         <div className="relative mt-4 w-full max-w-2xl">
           <ProductDemo />
@@ -128,7 +135,7 @@ export default async function Home() {
       <AsciiBand pattern="dither" />
 
       {/* Merchants */}
-      <section className="relative border-b px-6 py-20 lg:px-12">
+      <section id="merchants" className="relative border-b px-6 py-20 lg:px-12">
         <GridCross position="top-left" />
         <GridCross position="bottom-right" />
         <div className="mb-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
