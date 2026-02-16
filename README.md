@@ -1,8 +1,8 @@
+![ScuttlePay](scuttlepay-banner.png)
+
 # ScuttlePay
 
 A Claude Code plugin that lets your agent spend USDC. Search products, check balances, and make purchases on Shopify storefronts — settled on-chain via Base.
-
-![ScuttlePay](scuttlepay-banner.png)
 
 ![Built with Opus 4.6 — a Claude Code hackathon](cc-hackathon.png)
 
