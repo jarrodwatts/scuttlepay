@@ -342,7 +342,12 @@ async function adminCreateOrder(
 ): Promise<OrderCreateResponse> {
   const lineItem: Record<string, unknown> = {
     quantity: params.quantity,
-    price: params.priceUsdc,
+    priceSet: {
+      shopMoney: {
+        amount: params.priceUsdc,
+        currencyCode: "USD",
+      },
+    },
   };
 
   if (params.variantId) {
