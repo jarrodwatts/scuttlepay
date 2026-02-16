@@ -1,7 +1,6 @@
 import "~/styles/globals.css";
 
 import { type Metadata } from "next";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { env } from "~/env";
@@ -39,8 +38,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`dark ${geist.variable} ${geistMono.variable}`}>
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- Shopify App Bridge requires synchronous loading */}
+        <script src={APP_BRIDGE_URL} />
+      </head>
       <body>
-        <Script src={APP_BRIDGE_URL} strategy="beforeInteractive" />
         <Providers>{children}</Providers>
       </body>
     </html>
