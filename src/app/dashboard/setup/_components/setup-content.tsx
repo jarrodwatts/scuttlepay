@@ -131,56 +131,159 @@ function AgentKeyCard() {
   );
 }
 
-function McpConfigCard() {
+function ApiConfigCard() {
   const { data: agents } = api.agent.list.useQuery();
-  const configCopy = useCopy();
+  const envCopy = useCopy();
   const latestAgent = agents?.[0];
 
-  const [apiUrl, setApiUrl] = useState("https://your-app.vercel.app/api/trpc");
+  const [apiUrl, setApiUrl] = useState("https://your-app.vercel.app");
   useEffect(() => {
-    setApiUrl(`${window.location.origin}/api/trpc`);
+    setApiUrl(window.location.origin);
   }, []);
 
-  const config = JSON.stringify(
-    {
-      mcpServers: {
-        scuttlepay: {
-          command: "npx",
-          args: ["-y", "@scuttlepay/mcp"],
-          env: {
-            SCUTTLEPAY_API_KEY: latestAgent?.keyPrefix
-              ? `${latestAgent.keyPrefix}...`
-              : "sk_test_YOUR_KEY_HERE",
-            SCUTTLEPAY_API_URL: apiUrl,
-          },
-        },
-      },
-    },
-    null,
-    2,
-  );
+  const keyPlaceholder = latestAgent?.keyPrefix
+    ? `${latestAgent.keyPrefix}...`
+    : "sk_YOUR_KEY_HERE";
+
+  const envBlock = `SCUTTLEPAY_API_KEY=${keyPlaceholder}\nSCUTTLEPAY_API_URL=${apiUrl}`;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>MCP Configuration</CardTitle>
+        <CardTitle>Environment Variables</CardTitle>
         <CardDescription>
-          Add this to your Claude Code MCP config to connect your agent.
+          Set these in your agent&apos;s environment. All API requests require
+          the key as a Bearer token.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="relative">
           <pre className="overflow-x-auto border border-border bg-muted p-4 font-mono text-xs leading-relaxed">
-            {config}
+            {envBlock}
           </pre>
           <Button
             variant="ghost"
             size="icon-xs"
             className="absolute top-2 right-2"
-            onClick={() => configCopy.copy(config)}
-            aria-label="Copy MCP config"
+            onClick={() => envCopy.copy(envBlock)}
+            aria-label="Copy environment variables"
           >
-            {configCopy.copied ? (
+            {envCopy.copied ? (
+              <Check className="size-3.5 text-accent" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const API_ENDPOINTS = [
+  {
+    method: "GET",
+    path: "/api/mcp/wallet",
+    description: "Check balance and wallet info",
+  },
+  {
+    method: "GET",
+    path: "/api/mcp/merchants",
+    description: "List available merchants",
+  },
+  {
+    method: "GET",
+    path: "/api/mcp/products",
+    description: "Search products (use ?merchantId=...&q=...)",
+  },
+  {
+    method: "POST",
+    path: "/api/mcp/purchase",
+    description: "Buy a product with USDC",
+  },
+  {
+    method: "GET",
+    path: "/api/mcp/transactions",
+    description: "View transaction history",
+  },
+] as const;
+
+function ApiEndpointsCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>REST API</CardTitle>
+        <CardDescription>
+          Your agent calls these endpoints with the API key as a Bearer token.
+          Works with any HTTP client.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-2">
+          {API_ENDPOINTS.map(({ method, path, description }) => (
+            <div key={path} className="flex items-baseline gap-3">
+              <code className="shrink-0 border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                {method}
+              </code>
+              <code className="shrink-0 font-mono text-xs text-accent">
+                {path}
+              </code>
+              <span className="text-xs text-muted-foreground">
+                {description}
+              </span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SystemPromptCard() {
+  const promptCopy = useCopy();
+
+  const [apiUrl, setApiUrl] = useState("https://your-app.vercel.app");
+  useEffect(() => {
+    setApiUrl(window.location.origin);
+  }, []);
+
+  const prompt = `You have access to a ScuttlePay wallet for making USDC purchases on behalf of the user.
+
+API base URL: ${apiUrl}
+Auth: pass the SCUTTLEPAY_API_KEY environment variable as a Bearer token on every request.
+
+Available endpoints:
+- GET /api/mcp/wallet — check your balance
+- GET /api/mcp/merchants — list available stores
+- GET /api/mcp/products?merchantId=<id>&q=<query> — search products
+- GET /api/mcp/products?merchantId=<id>&id=<productId> — get product details and variants
+- POST /api/mcp/purchase — buy a product (body: { merchantId, productId, variantId?, quantity? })
+- GET /api/mcp/transactions — view transaction history
+
+All USDC amounts are strings (e.g. "25.00"). Always confirm with the user before making a purchase.`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>System Prompt</CardTitle>
+        <CardDescription>
+          Add this to your agent&apos;s system prompt so it knows how to use the
+          ScuttlePay API.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="relative">
+          <pre className="overflow-x-auto border border-border bg-muted p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+            {prompt}
+          </pre>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="absolute top-2 right-2"
+            onClick={() => promptCopy.copy(prompt)}
+            aria-label="Copy system prompt"
+          >
+            {promptCopy.copied ? (
               <Check className="size-3.5 text-accent" />
             ) : (
               <Copy className="size-3.5" />
@@ -200,12 +303,18 @@ const QUICK_START_STEPS = [
   },
   {
     step: 2,
-    title: "Add MCP config to Claude Code",
+    title: "Add the system prompt to your agent",
     description:
-      "Copy the config snippet above and add it to your Claude Code MCP settings.",
+      "Copy the system prompt below and add it to your agent's instructions.",
   },
   {
     step: 3,
+    title: "Set environment variables",
+    description:
+      "Set SCUTTLEPAY_API_KEY and SCUTTLEPAY_API_URL in your agent's environment.",
+  },
+  {
+    step: 4,
     title: "Ask your agent to buy something",
     description:
       'Try: "Search for headphones under $50 and buy the best one."',
@@ -237,68 +346,6 @@ function QuickStartCard() {
   );
 }
 
-function SystemPromptCard() {
-  const promptCopy = useCopy();
-
-  const prompt =
-    "You have access to ScuttlePay tools for shopping. Use search_products to browse, get_balance to check funds, and buy to make purchases.";
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>System Prompt Suggestion</CardTitle>
-        <CardDescription>
-          Add this to your agent&apos;s system prompt so it knows about
-          ScuttlePay.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="relative">
-          <blockquote className="border-l-2 border-accent p-4 font-mono text-sm leading-relaxed text-muted-foreground">
-            {prompt}
-          </blockquote>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="absolute top-2 right-2"
-            onClick={() => promptCopy.copy(prompt)}
-            aria-label="Copy system prompt"
-          >
-            {promptCopy.copied ? (
-              <Check className="size-3.5 text-accent" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function NpmPackageLink() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>npm Package</CardTitle>
-        <CardDescription>
-          The MCP server is available as an npm package.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <a
-          href="https://www.npmjs.com/package/@scuttlepay/mcp"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-sm text-accent underline underline-offset-4 hover:text-accent/80"
-        >
-          @scuttlepay/mcp on npm
-        </a>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function SetupContent() {
   return (
     <div className="flex flex-col gap-6">
@@ -306,10 +353,10 @@ export function SetupContent() {
         Agent Setup
       </h1>
       <AgentKeyCard />
-      <McpConfigCard />
       <QuickStartCard />
+      <ApiConfigCard />
       <SystemPromptCard />
-      <NpmPackageLink />
+      <ApiEndpointsCard />
     </div>
   );
 }

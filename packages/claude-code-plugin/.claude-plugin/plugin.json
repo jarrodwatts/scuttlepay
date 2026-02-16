@@ -1,0 +1,11 @@
+{
+  "name": "scuttlepay",
+  "version": "0.1.0",
+  "description": "Interact with the ScuttlePay API to manage wallets, search products, make purchases, and view transactions using USDC on Base.",
+  "author": {
+    "name": "ScuttlePay"
+  },
+  "repository": "https://github.com/scuttlepay/scuttlepay",
+  "license": "MIT",
+  "keywords": ["payments", "usdc", "crypto", "ai-agents", "shopify"]
+}
