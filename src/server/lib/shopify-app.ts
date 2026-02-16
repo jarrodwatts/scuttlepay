@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { env } from "~/env";
 
-const SCOPES = "read_products,write_orders,read_orders";
+const SCOPES = "read_products,write_orders,read_orders,unauthenticated_read_product_listings";
 const ADMIN_API_VERSION = "2024-10";
 
 function requireAppCredentials(): { apiKey: string; apiSecret: string } {
