@@ -18,6 +18,7 @@ import * as walletService from "./wallet.service";
 import * as spendingService from "./spending.service";
 import * as paymentService from "./payment.service";
 import { compareUsdc, multiplyUsdc } from "~/server/lib/usdc-math";
+import { env } from "~/env";
 
 type PurchaseParams = PurchaseRequest & {
   walletId: string;
@@ -128,11 +129,14 @@ export async function purchase(
 
   let settlement: paymentService.SettlementResult;
   try {
-    settlement = await paymentService.settleWithStripe(
-      walletId,
-      totalUsdc,
-      merchant.stripeAccountId,
-    );
+    settlement =
+      env.SETTLEMENT_MODE === "direct"
+        ? await paymentService.settleDirectly(walletId, totalUsdc)
+        : await paymentService.settleWithStripe(
+            walletId,
+            totalUsdc,
+            merchant.stripeAccountId,
+          );
   } catch (err) {
     await db
       .update(transactions)
@@ -164,7 +168,7 @@ export async function purchase(
     console.error("[purchase] Failed to update transaction to SETTLED", {
       transactionId: txRow.id,
       txHash: settlement.txHash,
-      stripePaymentIntentId: settlement.stripePaymentIntentId,
+      paymentReference: settlement.paymentReference,
       error: err instanceof Error ? err.message : "unknown",
     });
   }
@@ -182,7 +186,7 @@ export async function purchase(
       quantity,
       priceUsdc: unitPrice,
       totalUsdc,
-      stripePaymentIntentId: settlement.stripePaymentIntentId,
+      paymentReference: settlement.paymentReference,
       customerEmail: params.customerEmail,
       customerFirstName: params.customerFirstName,
       customerLastName: params.customerLastName,

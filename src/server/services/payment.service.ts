@@ -13,6 +13,7 @@ import {
 import { getAddress } from "~/server/services/wallet.service";
 import { parseUsdc, isPositiveUsdc, usdcToCents } from "~/server/lib/usdc-math";
 import { getStripeClient } from "~/server/lib/stripe";
+import { env } from "~/env";
 
 // Stripe crypto/x402 response types (not yet in SDK type definitions)
 interface CryptoDepositAddress {
@@ -38,7 +39,7 @@ interface CryptoPaymentIntentCreateParams
 const MIN_GAS_WEI = 100_000_000_000_000n; // 0.0001 ETH
 
 export interface SettlementResult {
-  stripePaymentIntentId: string;
+  paymentReference: string;
   txHash: string;
   settledAt: Date;
 }
@@ -190,7 +191,90 @@ export async function settleWithStripe(
   }
 
   return {
-    stripePaymentIntentId: paymentIntent.id,
+    paymentReference: paymentIntent.id,
+    txHash: transactionHash,
+    settledAt: new Date(),
+  };
+}
+
+export async function settleDirectly(
+  walletId: string,
+  amountUsdc: string,
+): Promise<SettlementResult> {
+  const settlementAddress = env.SETTLEMENT_ADDRESS;
+  if (!settlementAddress) {
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: "SETTLEMENT_ADDRESS is not configured (required for direct settlement mode)",
+    });
+  }
+
+  if (!isPositiveUsdc(amountUsdc)) {
+    throw new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: `Invalid amount: ${amountUsdc}`,
+      metadata: { amountUsdc },
+    });
+  }
+
+  const fromAddress = await getAddress(walletId);
+  const serverWallet = getServerWallet(fromAddress);
+
+  const gasBalance = await getWalletBalance({
+    address: fromAddress,
+    client: getThirdwebClient(),
+    chain: activeChain,
+  });
+  if (gasBalance.value < MIN_GAS_WEI) {
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `Insufficient ETH for gas: ${gasBalance.displayValue} ETH`,
+      metadata: { gasBalance: gasBalance.displayValue },
+    });
+  }
+
+  const usdcContract = getUsdcContract();
+  const valueRaw = parseUsdc(amountUsdc);
+  const tx = transfer({
+    contract: usdcContract,
+    to: settlementAddress,
+    amountWei: valueRaw,
+  });
+
+  const { transactionId } = await serverWallet.enqueueTransaction({
+    transaction: tx,
+  });
+
+  console.error("[settleDirectly] USDC transfer enqueued", {
+    transactionId,
+    settlementAddress,
+    amountUsdc,
+    fromAddress,
+  });
+
+  let transactionHash: string;
+  try {
+    const result = await Engine.waitForTransactionHash({
+      client: getThirdwebClient(),
+      transactionId,
+    });
+    transactionHash = result.transactionHash;
+  } catch (err) {
+    console.error("[settleDirectly] USDC transfer enqueued but hash confirmation failed", {
+      transactionId,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `USDC transfer enqueued (engineTxId: ${transactionId}) but hash confirmation failed: ${err instanceof Error ? err.message : "unknown"}`,
+      retriable: true,
+      metadata: { transactionId },
+      cause: err,
+    });
+  }
+
+  return {
+    paymentReference: transactionHash,
     txHash: transactionHash,
     settledAt: new Date(),
   };

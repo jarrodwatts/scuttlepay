@@ -21,6 +21,10 @@ export const env = createEnv({
     SHOPIFY_APP_API_SECRET: z.string().optional(),
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_CONNECT_CLIENT_ID: z.string().optional(),
+    SETTLEMENT_MODE: z
+      .enum(["stripe", "direct"])
+      .default("stripe"),
+    SETTLEMENT_ADDRESS: z.string().optional(),
   },
 
   client: {
@@ -47,6 +51,8 @@ export const env = createEnv({
     SHOPIFY_APP_API_SECRET: process.env.SHOPIFY_APP_API_SECRET,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_CONNECT_CLIENT_ID: process.env.STRIPE_CONNECT_CLIENT_ID,
+    SETTLEMENT_MODE: process.env.SETTLEMENT_MODE,
+    SETTLEMENT_ADDRESS: process.env.SETTLEMENT_ADDRESS,
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
     NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN: process.env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN,
     NEXT_PUBLIC_CHAIN_ENV: process.env.NEXT_PUBLIC_CHAIN_ENV,

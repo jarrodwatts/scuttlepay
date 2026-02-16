@@ -317,7 +317,7 @@ export interface CreateOrderParams {
   quantity: number;
   priceUsdc: string;
   totalUsdc: string;
-  stripePaymentIntentId: string;
+  paymentReference: string;
   customerEmail?: string;
   customerFirstName?: string;
   customerLastName?: string;
@@ -360,7 +360,7 @@ async function adminCreateOrder(
         gateway: "ScuttlePay",
         kind: "SALE",
         status: "SUCCESS",
-        authorizationCode: params.stripePaymentIntentId,
+        authorizationCode: params.paymentReference,
         amountSet: {
           shopMoney: {
             amount: params.totalUsdc,
@@ -415,7 +415,7 @@ export async function createOrder(
       throw new ScuttlePayError({
         code: ErrorCode.ORDER_CREATION_FAILED,
         message: `Shopify orderCreate failed: ${msg}`,
-        metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+        metadata: { paymentReference: params.paymentReference },
       });
     }
 
@@ -423,7 +423,7 @@ export async function createOrder(
       throw new ScuttlePayError({
         code: ErrorCode.ORDER_CREATION_FAILED,
         message: "Shopify orderCreate returned null order",
-        metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+        metadata: { paymentReference: params.paymentReference },
       });
     }
 
@@ -445,7 +445,7 @@ export async function createOrder(
         throw new ScuttlePayError({
           code: ErrorCode.ORDER_CREATION_FAILED,
           message: `Order creation failed after rate-limit retry: ${retryMsg}`,
-          metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+          metadata: { paymentReference: params.paymentReference },
         });
       }
 
@@ -453,7 +453,7 @@ export async function createOrder(
         throw new ScuttlePayError({
           code: ErrorCode.ORDER_CREATION_FAILED,
           message: "Shopify orderCreate returned null order after rate-limit retry",
-          metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+          metadata: { paymentReference: params.paymentReference },
         });
       }
 
@@ -466,7 +466,7 @@ export async function createOrder(
     throw new ScuttlePayError({
       code: ErrorCode.ORDER_CREATION_FAILED,
       message: `Order creation failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+      metadata: { paymentReference: params.paymentReference },
       cause: err,
     });
   }
