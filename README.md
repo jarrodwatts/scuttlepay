@@ -5,9 +5,9 @@ A Claude Code plugin that lets your agent spend USDC. Search products, check bal
 [![License](https://img.shields.io/github/license/jarrodwatts/scuttlepay)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/jarrodwatts/scuttlepay)](https://github.com/jarrodwatts/scuttlepay/stargazers)
 
-![ScuttlePay](../../scuttlepay-banner.png)
+![ScuttlePay](scuttlepay-banner.png)
 
-![Built with Opus 4.6 — a Claude Code hackathon](../../cc-hackathon.png)
+![Built with Opus 4.6 — a Claude Code hackathon](cc-hackathon.png)
 
 ## Install
 
@@ -91,4 +91,4 @@ Spending limits (per-transaction and daily) are configured when you create your 
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE)
+MIT — see [LICENSE](LICENSE)
