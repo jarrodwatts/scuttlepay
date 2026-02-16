@@ -20,7 +20,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="relative hidden w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground md:block">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground md:block">
         <GridCross position="top-right" />
         <div className="flex h-14 items-center border-b px-6">
           <Link href="/">
