@@ -22,6 +22,7 @@
     "e2e": "tsx --env-file=.env scripts/e2e-test.ts"
   },
   "dependencies": {
+    "@radix-ui/react-icons": "^1.3.2",
     "@scuttlepay/shared": "workspace:*",
     "@t3-oss/env-nextjs": "^0.12.0",
     "@tanstack/react-query": "^5.69.0",
@@ -32,6 +33,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.41.0",
     "lucide-react": "^0.563.0",
+    "motion": "^12.34.0",
     "next": "^15.2.3",
     "postgres": "^3.4.4",
     "radix-ui": "^1.4.3",
