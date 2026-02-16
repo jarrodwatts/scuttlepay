@@ -7,7 +7,7 @@ import {
 
 import {
   storefrontQuery,
-  adminRequest,
+  adminGraphqlMutation,
   ShopifyAdminApiError,
   type ShopifyCredentials,
 } from "~/server/lib/shopify";
@@ -104,8 +104,10 @@ interface GetProductResponse {
 }
 
 function parseMoneyToUsdc(money: ShopifyMoneyV2): string {
-  const amount = parseFloat(money.amount);
-  return amount.toFixed(6);
+  const parts = money.amount.split(".");
+  const whole = parts[0] ?? "0";
+  const frac = (parts[1] ?? "").padEnd(6, "0").slice(0, 6);
+  return `${whole}.${frac}`;
 }
 
 const SEARCH_PRODUCTS_QUERY = `
@@ -227,7 +229,13 @@ export async function searchProducts(
     return results;
   } catch (err) {
     const stale = getStale<ProductSearchResult[]>(cacheKey);
-    if (stale) return stale;
+    if (stale) {
+      console.error("[shopify] Serving stale search results", {
+        cacheKey,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+      return stale;
+    }
     throw err;
   }
 }
@@ -265,28 +273,40 @@ export async function getProduct(
     if (err instanceof ScuttlePayError) throw err;
 
     const stale = getStale<ProductDetail>(cacheKey);
-    if (stale) return stale;
+    if (stale) {
+      console.error("[shopify] Serving stale product data", {
+        cacheKey,
+        error: err instanceof Error ? err.message : "unknown",
+      });
+      return stale;
+    }
     throw err;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Order creation (Admin REST API)
+// Order creation (Admin GraphQL — orderCreate + Transaction)
 // ---------------------------------------------------------------------------
 
-interface ShopifyDraftOrderLineItem {
-  variant_id?: number;
-  title?: string;
-  quantity: number;
-  price?: string;
-}
+const ORDER_CREATE_MUTATION = `
+  mutation orderCreate($order: OrderCreateOrderInput!) {
+    orderCreate(order: $order) {
+      order {
+        id
+        name
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
 
-interface ShopifyDraftOrderResponse {
-  draft_order: {
-    id: number;
-    order_id: number | null;
-    name: string;
-    status: string;
+interface OrderCreateResponse {
+  orderCreate: {
+    order: { id: string; name: string } | null;
+    userErrors: Array<{ field: string[]; message: string }>;
   };
 }
 
@@ -296,57 +316,88 @@ export interface CreateOrderParams {
   variantId?: string;
   quantity: number;
   priceUsdc: string;
-  txHash: string;
-  walletAddress: string;
+  totalUsdc: string;
+  stripePaymentIntentId: string;
   customerEmail?: string;
+  customerFirstName?: string;
+  customerLastName?: string;
+  shippingAddress?: {
+    address1: string;
+    address2?: string;
+    city: string;
+    provinceCode: string;
+    countryCode: string;
+    zip: string;
+  };
 }
 
 export interface CreateOrderResult {
-  shopifyOrderId: number;
+  shopifyOrderId: string;
   orderNumber: string;
 }
 
-function extractNumericId(gid: string): number {
-  const match = /\/(\d+)$/.exec(gid);
-  if (!match?.[1]) {
-    throw new Error(`Cannot extract numeric ID from: ${gid}`);
-  }
-  return parseInt(match[1], 10);
-}
-
-async function adminCreateDraftOrder(
+async function adminCreateOrder(
   creds: ShopifyCredentials,
   params: CreateOrderParams,
-): Promise<ShopifyDraftOrderResponse> {
-  const lineItem: ShopifyDraftOrderLineItem = {
+): Promise<OrderCreateResponse> {
+  const lineItem: Record<string, unknown> = {
     quantity: params.quantity,
+    price: params.priceUsdc,
   };
 
   if (params.variantId) {
-    lineItem.variant_id = extractNumericId(params.variantId);
+    lineItem.variantId = params.variantId;
   } else {
     lineItem.title = params.productTitle;
-    lineItem.price = params.priceUsdc;
   }
 
-  const draftOrder: Record<string, unknown> = {
-    line_items: [lineItem],
-    note: `Paid via ScuttlePay x402 | tx: ${params.txHash} | wallet: ${params.walletAddress}`,
-    tags: "scuttlepay, x402",
+  const order: Record<string, unknown> = {
+    lineItems: [lineItem],
+    financialStatus: "PAID",
+    currency: "USD",
+    transactions: [
+      {
+        gateway: "ScuttlePay",
+        kind: "SALE",
+        status: "SUCCESS",
+        authorizationCode: params.stripePaymentIntentId,
+        amountSet: {
+          shopMoney: {
+            amount: params.totalUsdc,
+            currencyCode: "USD",
+          },
+        },
+      },
+    ],
+    sourceName: "scuttlepay",
+    tags: ["scuttlepay"],
   };
 
   if (params.customerEmail) {
-    draftOrder.email = params.customerEmail;
+    order.customer = {
+      email: params.customerEmail,
+      firstName: params.customerFirstName,
+      lastName: params.customerLastName,
+    };
+    order.email = params.customerEmail;
   }
 
-  const { data } = await adminRequest<ShopifyDraftOrderResponse>(
-    creds,
-    "POST",
-    "/draft_orders.json",
-    { draft_order: draftOrder },
-  );
+  if (params.shippingAddress) {
+    order.shippingAddress = {
+      address1: params.shippingAddress.address1,
+      address2: params.shippingAddress.address2,
+      city: params.shippingAddress.city,
+      provinceCode: params.shippingAddress.provinceCode,
+      countryCodeV2: params.shippingAddress.countryCode,
+      zip: params.shippingAddress.zip,
+    };
+  }
 
-  return data;
+  return adminGraphqlMutation<OrderCreateResponse>(
+    creds,
+    ORDER_CREATE_MUTATION,
+    { order },
+  );
 }
 
 export async function createOrder(
@@ -355,41 +406,67 @@ export async function createOrder(
   const creds = await getMerchantCreds(params.merchantId);
 
   try {
-    const response = await adminCreateDraftOrder(creds, params);
+    const response = await adminCreateOrder(creds, params);
 
-    return {
-      shopifyOrderId: response.draft_order.id,
-      orderNumber: response.draft_order.name,
-    };
-  } catch (err) {
-    if (err instanceof ShopifyAdminApiError && err.statusCode === 429) {
-      console.error("[createOrder] Rate limited, retrying once", {
-        txHash: params.txHash,
-        retryAfterMs: err.retryAfterMs,
+    if (response.orderCreate.userErrors.length > 0) {
+      const msg = response.orderCreate.userErrors
+        .map((e) => e.message)
+        .join("; ");
+      throw new ScuttlePayError({
+        code: ErrorCode.ORDER_CREATION_FAILED,
+        message: `Shopify orderCreate failed: ${msg}`,
+        metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
       });
-      await new Promise((r) => setTimeout(r, err.retryAfterMs ?? 2000));
-      try {
-        const response = await adminCreateDraftOrder(creds, params);
-        return {
-          shopifyOrderId: response.draft_order.id,
-          orderNumber: response.draft_order.name,
-        };
-      } catch (retryErr) {
-        console.error("[createOrder] Failed after retry", retryErr);
-        throw new ScuttlePayError({
-          code: ErrorCode.ORDER_CREATION_FAILED,
-          message: `Order creation failed after retry: ${retryErr instanceof Error ? retryErr.message : "unknown error"}`,
-          metadata: { txHash: params.txHash },
-          cause: retryErr,
-        });
-      }
     }
 
-    console.error("[createOrder] Failed", err);
+    if (!response.orderCreate.order) {
+      throw new ScuttlePayError({
+        code: ErrorCode.ORDER_CREATION_FAILED,
+        message: "Shopify orderCreate returned null order",
+        metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+      });
+    }
+
+    return {
+      shopifyOrderId: response.orderCreate.order.id,
+      orderNumber: response.orderCreate.order.name,
+    };
+  } catch (err) {
+    if (err instanceof ScuttlePayError) throw err;
+
+    if (err instanceof ShopifyAdminApiError && err.statusCode === 429) {
+      await new Promise((r) => setTimeout(r, err.retryAfterMs ?? 2000));
+      const retryResponse = await adminCreateOrder(creds, params);
+
+      if (retryResponse.orderCreate.userErrors.length > 0) {
+        const retryMsg = retryResponse.orderCreate.userErrors
+          .map((e) => e.message)
+          .join("; ");
+        throw new ScuttlePayError({
+          code: ErrorCode.ORDER_CREATION_FAILED,
+          message: `Order creation failed after rate-limit retry: ${retryMsg}`,
+          metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+        });
+      }
+
+      if (!retryResponse.orderCreate.order) {
+        throw new ScuttlePayError({
+          code: ErrorCode.ORDER_CREATION_FAILED,
+          message: "Shopify orderCreate returned null order after rate-limit retry",
+          metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
+        });
+      }
+
+      return {
+        shopifyOrderId: retryResponse.orderCreate.order.id,
+        orderNumber: retryResponse.orderCreate.order.name,
+      };
+    }
+
     throw new ScuttlePayError({
       code: ErrorCode.ORDER_CREATION_FAILED,
       message: `Order creation failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      metadata: { txHash: params.txHash },
+      metadata: { stripePaymentIntentId: params.stripePaymentIntentId },
       cause: err,
     });
   }

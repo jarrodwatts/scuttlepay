@@ -1,257 +1,197 @@
-import { type Hex } from "thirdweb";
-import {
-  USDC_ADDRESSES,
-  CHAIN_NAMES,
-} from "@scuttlepay/shared";
+import type Stripe from "stripe";
+import { Engine } from "thirdweb";
+import { transfer } from "thirdweb/extensions/erc20";
+import { getWalletBalance } from "thirdweb/wallets";
+import { ErrorCode, ScuttlePayError } from "@scuttlepay/shared";
 
-import { env } from "~/env";
 import {
   activeChain,
-  chainId,
+  getThirdwebClient,
   getServerWallet,
+  getUsdcContract,
 } from "~/server/lib/thirdweb";
 import { getAddress } from "~/server/services/wallet.service";
-import { parseUsdc, isPositiveUsdc } from "~/server/lib/usdc-math";
+import { parseUsdc, isPositiveUsdc, usdcToCents } from "~/server/lib/usdc-math";
+import { getStripeClient } from "~/server/lib/stripe";
 
-// ---------------------------------------------------------------------------
-// Error types
-// ---------------------------------------------------------------------------
-
-export type PaymentServiceErrorCode =
-  | "PAYMENT_FAILED"
-  | "INVALID_ADDRESS"
-  | "INVALID_AMOUNT";
-
-export class PaymentServiceError extends Error {
-  code: PaymentServiceErrorCode;
-  retriable: boolean;
-
-  constructor(
-    code: PaymentServiceErrorCode,
-    message: string,
-    retriable = false,
-  ) {
-    super(message);
-    this.name = "PaymentServiceError";
-    this.code = code;
-    this.retriable = retriable;
-  }
+// Stripe crypto/x402 response types (not yet in SDK type definitions)
+interface CryptoDepositAddress {
+  address: string;
 }
 
-// ---------------------------------------------------------------------------
-// EIP-712 / EIP-3009 constants
-// ---------------------------------------------------------------------------
-
-const TRANSFER_WITH_AUTHORIZATION_TYPES = {
-  TransferWithAuthorization: [
-    { name: "from", type: "address" },
-    { name: "to", type: "address" },
-    { name: "value", type: "uint256" },
-    { name: "validAfter", type: "uint256" },
-    { name: "validBefore", type: "uint256" },
-    { name: "nonce", type: "bytes32" },
-  ],
-} as const;
-
-function getUsdcAddress(): Hex {
-  const addr = USDC_ADDRESSES[chainId];
-  if (!addr) {
-    throw new PaymentServiceError(
-      "PAYMENT_FAILED",
-      `USDC not configured for chain ${String(activeChain.id)}`,
-    );
-  }
-  return addr as Hex;
+interface CryptoDepositDetails {
+  deposit_addresses: Record<string, CryptoDepositAddress>;
 }
 
-function getChainName(): string {
-  const name = CHAIN_NAMES[chainId];
-  if (!name) {
-    throw new PaymentServiceError(
-      "PAYMENT_FAILED",
-      `Chain name not configured for chain ${String(activeChain.id)}`,
-    );
-  }
-  return name;
+interface CryptoNextAction extends Stripe.PaymentIntent.NextAction {
+  crypto_collect_deposit_details?: CryptoDepositDetails;
 }
 
-function randomNonce(): Hex {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return `0x${Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")}`;
+// x402 crypto mode param (not yet in SDK types — remove when stripe-node adds native support)
+interface CryptoPaymentIntentCreateParams
+  extends Omit<Stripe.PaymentIntentCreateParams, "payment_method_options"> {
+  payment_method_options?: Stripe.PaymentIntentCreateParams["payment_method_options"] & {
+    crypto?: { mode?: "custom" };
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Facilitator communication
-// ---------------------------------------------------------------------------
-
-interface FacilitatorSettleResponse {
-  success: boolean;
-  error?: string;
-  transaction?: string;
-  networkId?: string;
-}
-
-async function callFacilitatorSettle(
-  payload: Record<string, unknown>,
-  paymentRequirements: Record<string, unknown>,
-): Promise<FacilitatorSettleResponse> {
-  const url = `${env.FACILITATOR_URL}/settle`;
-
-  const body = JSON.stringify({
-    payload,
-    paymentRequirements,
-  });
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "TimeoutError") {
-      throw new PaymentServiceError(
-        "PAYMENT_FAILED",
-        "Facilitator request timed out",
-        true,
-      );
-    }
-    throw new PaymentServiceError(
-      "PAYMENT_FAILED",
-      `Facilitator request failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      true,
-    );
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "unknown error");
-    throw new PaymentServiceError(
-      "PAYMENT_FAILED",
-      `Facilitator returned ${String(response.status)}: ${text}`,
-      response.status >= 500,
-    );
-  }
-
-  return (await response.json()) as FacilitatorSettleResponse;
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+const MIN_GAS_WEI = 100_000_000_000_000n; // 0.0001 ETH
 
 export interface SettlementResult {
+  stripePaymentIntentId: string;
   txHash: string;
   settledAt: Date;
 }
 
-export async function signAndSettle(
+export async function settleWithStripe(
   walletId: string,
   amountUsdc: string,
-  payToAddress: string,
+  stripeAccountId: string,
 ): Promise<SettlementResult> {
-  if (!/^0x[a-fA-F0-9]{40}$/.test(payToAddress)) {
-    throw new PaymentServiceError(
-      "INVALID_ADDRESS",
-      `Invalid payTo address: ${payToAddress}`,
-    );
+  if (!stripeAccountId) {
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: "Merchant has no Stripe Connected Account",
+    });
   }
 
   if (!isPositiveUsdc(amountUsdc)) {
-    throw new PaymentServiceError(
-      "INVALID_AMOUNT",
-      `Invalid amount: ${amountUsdc}`,
-    );
+    throw new ScuttlePayError({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: `Invalid amount: ${amountUsdc}`,
+      metadata: { amountUsdc },
+    });
   }
 
   const fromAddress = await getAddress(walletId);
-  const usdcAddress = getUsdcAddress();
-  const chainName = getChainName();
-  const valueRaw = parseUsdc(amountUsdc);
-  const nonce = randomNonce();
-  const validAfter = 0n;
-  const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
+  const amountCents = usdcToCents(amountUsdc);
 
-  // Sign EIP-712 TransferWithAuthorization
   const serverWallet = getServerWallet(fromAddress);
-  const signature = await serverWallet.signTypedData({
-    domain: {
-      name: "USD Coin",
-      version: "2",
-      chainId: BigInt(activeChain.id),
-      verifyingContract: usdcAddress,
-    },
-    types: TRANSFER_WITH_AUTHORIZATION_TYPES,
-    primaryType: "TransferWithAuthorization",
-    message: {
-      from: fromAddress,
-      to: payToAddress as Hex,
-      value: valueRaw,
-      validAfter,
-      validBefore,
-      nonce,
-    },
+
+  const gasBalance = await getWalletBalance({
+    address: fromAddress,
+    client: getThirdwebClient(),
+    chain: activeChain,
   });
-
-  const authorization = {
-    from: fromAddress,
-    to: payToAddress,
-    value: valueRaw.toString(),
-    validAfter: validAfter.toString(),
-    validBefore: validBefore.toString(),
-    nonce,
-  };
-
-  const payload = {
-    x402Version: 1,
-    scheme: "exact",
-    network: chainName,
-    payload: {
-      signature,
-      authorization,
-    },
-  };
-
-  const paymentRequirements = {
-    scheme: "exact",
-    network: chainName,
-    maxAmountRequired: valueRaw.toString(),
-    resource: "scuttlepay-purchase",
-    description: "ScuttlePay purchase settlement",
-    payTo: payToAddress,
-    maxTimeoutSeconds: 3600,
-    asset: usdcAddress,
-    extra: {},
-  };
-
-  // Attempt settlement with one retry on timeout/5xx
-  let result: FacilitatorSettleResponse;
-  try {
-    result = await callFacilitatorSettle(payload, paymentRequirements);
-  } catch (err) {
-    if (err instanceof PaymentServiceError && err.retriable) {
-      await new Promise((r) => setTimeout(r, 3000));
-      result = await callFacilitatorSettle(payload, paymentRequirements);
-    } else {
-      throw err;
-    }
+  if (gasBalance.value < MIN_GAS_WEI) {
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `Insufficient ETH for gas: ${gasBalance.displayValue} ETH`,
+      metadata: { gasBalance: gasBalance.displayValue },
+    });
   }
 
-  if (!result.success || !result.transaction) {
-    throw new PaymentServiceError(
-      "PAYMENT_FAILED",
-      result.error ?? "Settlement failed: no transaction hash returned",
-      false,
+  const stripe = getStripeClient();
+  const createParams: CryptoPaymentIntentCreateParams = {
+    amount: amountCents,
+    currency: "usd",
+    payment_method_types: ["crypto"],
+    payment_method_data: { type: "crypto" },
+    payment_method_options: {
+      crypto: { mode: "custom" },
+    },
+    confirm: true,
+    transfer_data: { destination: stripeAccountId },
+  };
+
+  let paymentIntent: Stripe.PaymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.create(
+      createParams as Stripe.PaymentIntentCreateParams,
     );
+  } catch (err) {
+    console.error("[settleWithStripe] Stripe PaymentIntent creation failed", {
+      walletId,
+      amountUsdc,
+      stripeAccountId,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `Stripe PaymentIntent creation failed: ${err instanceof Error ? err.message : "unknown"}`,
+      metadata: { walletId, amountUsdc, stripeAccountId },
+      cause: err,
+    });
+  }
+
+  const nextAction = paymentIntent.next_action as CryptoNextAction | null;
+  const depositDetails = nextAction?.crypto_collect_deposit_details;
+  if (!depositDetails) {
+    await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
+      console.error("[settleWithStripe] Failed to cancel orphaned PaymentIntent", {
+        paymentIntentId: paymentIntent.id,
+        error: cancelErr instanceof Error ? cancelErr.message : "unknown",
+      });
+    });
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `Stripe did not return crypto deposit details (PI: ${paymentIntent.id})`,
+      metadata: { paymentIntentId: paymentIntent.id },
+    });
+  }
+
+  const networkKey = activeChain.id === 8453 ? "base" : "base-sepolia";
+  const depositEntry = depositDetails.deposit_addresses?.[networkKey];
+  if (!depositEntry) {
+    await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
+      console.error("[settleWithStripe] Failed to cancel PaymentIntent (no deposit address)", {
+        paymentIntentId: paymentIntent.id,
+        error: cancelErr instanceof Error ? cancelErr.message : "unknown",
+      });
+    });
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `No deposit address for network ${networkKey} (PI: ${paymentIntent.id})`,
+      metadata: { paymentIntentId: paymentIntent.id, networkKey },
+    });
+  }
+  const depositAddress = depositEntry.address;
+
+  const usdcContract = getUsdcContract();
+  const valueRaw = parseUsdc(amountUsdc);
+  const tx = transfer({
+    contract: usdcContract,
+    to: depositAddress,
+    amountWei: valueRaw,
+  });
+
+  const { transactionId } = await serverWallet.enqueueTransaction({
+    transaction: tx,
+  });
+
+  console.error("[settleWithStripe] USDC transfer enqueued", {
+    transactionId,
+    paymentIntentId: paymentIntent.id,
+    depositAddress,
+    amountUsdc,
+    fromAddress,
+  });
+
+  let transactionHash: string;
+  try {
+    const result = await Engine.waitForTransactionHash({
+      client: getThirdwebClient(),
+      transactionId,
+    });
+    transactionHash = result.transactionHash;
+  } catch (err) {
+    console.error("[settleWithStripe] USDC transfer enqueued but hash confirmation failed", {
+      transactionId,
+      paymentIntentId: paymentIntent.id,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    throw new ScuttlePayError({
+      code: ErrorCode.PAYMENT_FAILED,
+      message: `USDC transfer enqueued (engineTxId: ${transactionId}, PI: ${paymentIntent.id}) but hash confirmation failed: ${err instanceof Error ? err.message : "unknown"}`,
+      retriable: true,
+      metadata: { transactionId, paymentIntentId: paymentIntent.id },
+      cause: err,
+    });
   }
 
   return {
-    txHash: result.transaction,
+    stripePaymentIntentId: paymentIntent.id,
+    txHash: transactionHash,
     settledAt: new Date(),
   };
 }
-

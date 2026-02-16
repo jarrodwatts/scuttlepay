@@ -1,5 +1,5 @@
 const STOREFRONT_API_VERSION = "2024-10";
-const ADMIN_API_VERSION = "2024-01";
+const ADMIN_API_VERSION = "2026-01";
 
 export interface ShopifyCredentials {
   shopDomain: string;
@@ -117,4 +117,57 @@ export async function adminRequest<T>(
 
   const data = (await response.json()) as T;
   return { data };
+}
+
+// ---------------------------------------------------------------------------
+// Admin API (GraphQL)
+// ---------------------------------------------------------------------------
+
+export async function adminGraphqlMutation<T>(
+  creds: ShopifyCredentials,
+  mutation: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const url = `https://${creds.shopDomain}/admin/api/${ADMIN_API_VERSION}/graphql.json`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": creds.accessToken,
+    },
+    body: JSON.stringify({ query: mutation, variables }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("Retry-After");
+    const retryAfterMs = retryAfter ? parseFloat(retryAfter) * 1000 : 2000;
+    throw new ShopifyAdminApiError(
+      429,
+      "Shopify Admin API rate limited",
+      retryAfterMs,
+    );
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "unknown error");
+    throw new ShopifyAdminApiError(
+      response.status,
+      `Shopify Admin GraphQL error: ${response.status.toString()} ${text}`,
+    );
+  }
+
+  const json = (await response.json()) as GraphQLResponse<T>;
+
+  if (json.errors?.length) {
+    const message = json.errors.map((e) => e.message).join("; ");
+    throw new ShopifyAdminApiError(400, `Shopify Admin GraphQL error: ${message}`);
+  }
+
+  if (!json.data) {
+    throw new ShopifyAdminApiError(500, "Shopify Admin GraphQL returned empty data");
+  }
+
+  return json.data;
 }

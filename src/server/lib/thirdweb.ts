@@ -1,6 +1,6 @@
-import { createThirdwebClient, Engine } from "thirdweb";
+import { createThirdwebClient, getContract, Engine } from "thirdweb";
 import { baseSepolia, base } from "thirdweb/chains";
-import { BASE_MAINNET, BASE_SEPOLIA, type SupportedChainId } from "@scuttlepay/shared";
+import { BASE_MAINNET, BASE_SEPOLIA, USDC_ADDRESSES, type SupportedChainId } from "@scuttlepay/shared";
 import { env } from "~/env";
 
 const isMainnet = env.NEXT_PUBLIC_CHAIN_ENV === "mainnet";
@@ -10,14 +10,24 @@ export const chainId: SupportedChainId = isMainnet ? BASE_MAINNET : BASE_SEPOLIA
 let _client: ReturnType<typeof createThirdwebClient> | undefined;
 
 export function getThirdwebClient() {
-  if (!_client) {
-    const secretKey = env.THIRDWEB_SECRET_KEY;
-    if (!secretKey) {
-      throw new Error("THIRDWEB_SECRET_KEY is not configured");
-    }
-    _client = createThirdwebClient({ secretKey });
-  }
+  _client ??= createThirdwebClient({ secretKey: env.THIRDWEB_SECRET_KEY });
   return _client;
+}
+
+export function getUsdcAddress(): string {
+  const address = USDC_ADDRESSES[chainId];
+  if (!address) {
+    throw new Error(`USDC not configured for chain ${String(activeChain.id)}`);
+  }
+  return address;
+}
+
+export function getUsdcContract() {
+  return getContract({
+    client: getThirdwebClient(),
+    chain: activeChain,
+    address: getUsdcAddress(),
+  });
 }
 
 export function getServerWallet(address: string) {

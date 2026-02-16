@@ -5,11 +5,25 @@ export const usdcAmountSchema = z
   .string()
   .regex(/^\d+(\.\d{1,6})?$/, "Invalid USDC amount: up to 6 decimal places");
 
+export const shippingAddressSchema = z.object({
+  address1: z.string().min(1),
+  address2: z.string().optional(),
+  city: z.string().min(1),
+  provinceCode: z.string().min(1),
+  countryCode: z.string().regex(/^[A-Z]{2}$/, "Must be a 2-letter ISO country code"),
+  zip: z.string().min(1),
+});
+export type ShippingAddress = z.infer<typeof shippingAddressSchema>;
+
 export const purchaseRequestSchema = z.object({
   merchantId: z.string().min(1),
   productId: z.string().min(1),
   variantId: z.string().optional(),
   quantity: z.number().int().positive().default(1),
+  customerEmail: z.string().email().optional(),
+  customerFirstName: z.string().min(1).optional(),
+  customerLastName: z.string().min(1).optional(),
+  shippingAddress: shippingAddressSchema.optional(),
 });
 export type PurchaseRequest = z.infer<typeof purchaseRequestSchema>;
 

@@ -34,6 +34,10 @@ export const purchaseRouter = createTRPCRouter({
           productId: input.productId,
           variantId: input.variantId,
           quantity: input.quantity,
+          customerEmail: input.customerEmail,
+          customerFirstName: input.customerFirstName,
+          customerLastName: input.customerLastName,
+          shippingAddress: input.shippingAddress,
         });
       } catch (err) {
         mapServiceError(err);

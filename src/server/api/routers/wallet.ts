@@ -1,24 +1,10 @@
-import { TRPCError } from "@trpc/server";
 import { CHAIN_NAMES, walletBalanceSchema } from "@scuttlepay/shared";
 
 import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { chainId } from "~/server/lib/thirdweb";
-import {
-  getBalance,
-  getAddress,
-  WalletServiceError,
-} from "~/server/services/wallet.service";
+import { getBalance, getAddress } from "~/server/services/wallet.service";
 import { requireWalletId } from "~/server/lib/require-wallet";
-
-function mapServiceError(err: unknown): never {
-  if (err instanceof WalletServiceError) {
-    throw new TRPCError({
-      code: err.code === "WALLET_NOT_FOUND" ? "NOT_FOUND" : "INTERNAL_SERVER_ERROR",
-      message: err.message,
-    });
-  }
-  throw err;
-}
+import { mapServiceError } from "~/server/lib/map-service-error";
 
 const chainName = CHAIN_NAMES[chainId];
 
